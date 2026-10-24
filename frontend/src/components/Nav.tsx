@@ -1,10 +1,10 @@
-export type Tab = "home" | "scan" | "ledger";
+export type Tab = "home" | "scan" | "stock" | "ledger";
 
 const TABS: { id: Tab | null; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "scan", label: "Scan" },
+  { id: "stock", label: "Stock" },
   { id: "ledger", label: "Khata" },
-  { id: null, label: "Poocho" }, // Phase 3
 ];
 
 export default function Nav({ tab, onChange }: { tab: Tab; onChange: (tab: Tab) => void }) {

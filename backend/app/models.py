@@ -5,7 +5,7 @@ Every AI-extracted row carries `confidence` and `confirmed`; only
 confirmed rows count toward balances and stock levels.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -13,7 +13,7 @@ from sqlmodel import Field, SQLModel
 
 
 def now() -> datetime:
-    return datetime.now()
+    return datetime.now(timezone.utc)
 
 
 class Confidence(str, Enum):
@@ -90,6 +90,7 @@ class StockEntry(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     shop_id: int = Field(foreign_key="shop.id", index=True)
     product_id: int = Field(foreign_key="product.id", index=True)
+    supplier_bill_id: Optional[int] = Field(default=None, foreign_key="supplierbill.id", index=True)
     kind: StockEntryKind
     qty_change: float = 0  # + for purchase, - for sale; 0 for shelf checks
     rate: Optional[float] = None
@@ -98,6 +99,19 @@ class StockEntry(SQLModel, table=True):
     source_image: Optional[str] = None
     confidence: Confidence = Confidence.high
     confirmed: bool = False
+    created_at: datetime = Field(default_factory=now)
+
+
+class SupplierBill(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    shop_id: int = Field(foreign_key="shop.id", index=True)
+    supplier_name: Optional[str] = None
+    bill_date: Optional[date] = None
+    stated_total: Optional[float] = None
+    calculated_total: Optional[float] = None
+    source_image: Optional[str] = None
+    confirmation_token: Optional[str] = Field(default=None, index=True, unique=True)
+    confirmed: bool = True
     created_at: datetime = Field(default_factory=now)
 
 

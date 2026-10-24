@@ -72,20 +72,40 @@ The home screen shows all three.
 API: `POST /api/khata/extract` (photo → rows, nothing saved), `POST /api/khata/confirm`,
 `GET /api/customers`, `GET /api/customers/{id}/ledger`.
 
-#### Measuring accuracy on real photos
+### Supplier Bill + Shelf → Stock (Phase 2)
 
-Put photos in a folder with a same-named answer file per photo:
+1. **Scan** tab → select **Supplier Bill** mode:
+   - Photograph a printed or handwritten supplier bill / wholesaler parcha.
+   - Gemma extracts supplier name, bill date, items, quantities, units, rates, and totals.
+   - Ordinary Python logic verifies `quantity × rate = line_total` and compares sum of items against stated bill total.
+   - Any total mismatch is flagged with a warning banner; low confidence rows are highlighted in yellow.
+   - Explainable fuzzy matching suggests existing product candidates with match percentages (e.g. `Tata Salt (85% match)`) or allows creating a new product.
+   - On confirmation, an atomic database transaction creates `SupplierBill` and `StockEntry` (kind=`purchase`) records.
+   - Idempotency token prevents double-adding stock on duplicate confirmation.
+2. **Scan** tab → select **Shelf Photo** mode:
+   - Take a photo of a shelf, rack, or display tray.
+   - Gemma visually assesses stock fullness returning strictly `low`, `medium`, or `full` with visual evidence and uncertainty notes (never claims exact inventory counts).
+   - Confirmation saves a `StockEntry` with kind=`shelf_check` and `qty_change = 0`, keeping recorded inventory quantities accurate while displaying visual shelf alerts.
+3. **Stock** tab:
+   - Search products, view current counted stock balances, latest supplier bill additions, and visual shelf status tags (`SHELF: LOW` in yellow/rose).
+   - Tap any product to view its complete chronological stock and shelf check history.
 
-```
-samples/page1.jpg
-samples/page1.json   {"rows": [{"customer_name": "Ramesh", "amount": 500, "type": "gave"}]}
-```
+API endpoints:
+- `POST /api/stock/bills/extract` (bill photo → items, line totals, total mismatch check, fuzzy product matches)
+- `POST /api/stock/bills/confirm` (idempotent, atomic transaction creating stock entries)
+- `POST /api/stock/shelf/assess` (shelf photo → low/medium/full status, visual evidence)
+- `POST /api/stock/shelf/confirm` (saves visual check with zero quantity change)
+- `GET /api/stock/products` (list products with stock balance, shelf status, and update source)
+- `GET /api/stock/products/{id}/history` (audit history of purchases and shelf checks)
+
+#### Running Backend Tests
 
 ```bash
-cd backend && python -m scripts.eval_khata samples/
+cd backend
+PYTHONPATH=. .venv/bin/pytest tests/ -v
 ```
 
-It prints correct/expected per photo plus overall recall and precision.
+Tests verify all 10 Phase 2 requirements (mocked Gemma responses, retry logic, mismatch detection, editable values, fuzzy matching, stock additions, idempotency, transaction rollback, qualitative shelf status, and Phase 1 preservation).
 
 ## Switching the AI provider
 

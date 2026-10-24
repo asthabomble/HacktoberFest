@@ -2,22 +2,39 @@ import { useState } from "react";
 import Nav, { type Tab } from "./components/Nav";
 import Home from "./screens/Home";
 import Ledger from "./screens/Ledger";
-import Scan from "./screens/Scan";
+import Scan, { type ScanMode } from "./screens/Scan";
+import Stock from "./screens/Stock";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
+  const [scanMode, setScanMode] = useState<ScanMode>("khata");
   const [toast, setToast] = useState("");
 
-  function onSaved() {
-    setTab("ledger");
-    setToast("Khate mein save ho gaya ✓");
+  function onSaved(target: "ledger" | "stock", msg: string) {
+    setTab(target);
+    setToast(msg);
     setTimeout(() => setToast(""), 2500);
+  }
+
+  function handleNavigate(newTab: Tab, mode?: ScanMode) {
+    if (mode) {
+      setScanMode(mode);
+    }
+    setTab(newTab);
   }
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pb-24 pt-6">
-      {tab === "home" && <Home onNavigate={setTab} />}
-      {tab === "scan" && <Scan onSaved={onSaved} />}
+      {tab === "home" && <Home onNavigate={handleNavigate} />}
+      {tab === "scan" && <Scan key={scanMode} initialMode={scanMode} onSaved={onSaved} />}
+      {tab === "stock" && (
+        <Stock
+          onScanBill={() => {
+            setScanMode("bill");
+            setTab("scan");
+          }}
+        />
+      )}
       {tab === "ledger" && <Ledger />}
 
       {toast && (
@@ -25,7 +42,7 @@ export default function App() {
           {toast}
         </div>
       )}
-      <Nav tab={tab} onChange={setTab} />
+      <Nav tab={tab} onChange={(t) => handleNavigate(t)} />
     </div>
   );
 }
