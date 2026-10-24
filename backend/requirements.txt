@@ -4,3 +4,4 @@ sqlmodel>=0.0.48
 pydantic-settings==2.7.1
 httpx==0.28.1
 python-multipart==0.0.20
+google-auth>=2.38,<3

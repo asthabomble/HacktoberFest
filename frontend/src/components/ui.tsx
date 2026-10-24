@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { BookOpen, ChevronLeft, FileText, House, MessageSquare, ScanLine, Search, type LucideIcon } from "lucide-react";
+import { LanguageDropdown, useLanguage } from "../lib/language";
 
 /* ---------- Headers ---------- */
 
-export function MainHeader({ onSearch, onLanguage }: { onSearch: () => void; onLanguage: () => void }) {
+export function MainHeader({ onSearch, onLanguage }: { onSearch: () => void; onLanguage?: () => void }) {
   return (
     <header className="sticky top-0 z-20 bg-bar">
       <div className="mx-auto flex h-14 max-w-md items-center gap-3 px-4">
@@ -16,9 +17,7 @@ export function MainHeader({ onSearch, onLanguage }: { onSearch: () => void; onL
         <button onClick={onSearch} aria-label="Search customers" className="grid size-9 place-items-center text-logo">
           <Search size={22} />
         </button>
-        <button onClick={onLanguage} className="border-2 border-logo px-2 py-1 text-sm font-semibold text-logo">
-          हिं / EN
-        </button>
+        <LanguageDropdown />
       </div>
     </header>
   );
@@ -31,8 +30,8 @@ export function SubHeader({ title, onBack, right }: { title: string; onBack: () 
         <button onClick={onBack} aria-label="Back" className="grid size-10 place-items-center text-logo">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="flex-1 text-lg font-semibold text-logo">{title}</h1>
-        {right}
+        <h1 className="flex-1 text-lg font-semibold text-logo truncate">{title}</h1>
+        {right ?? <LanguageDropdown className="mr-2" />}
       </div>
     </header>
   );
@@ -169,18 +168,19 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
 
 export type NavId = "home" | "customers" | "scan" | "ask";
 
-const NAV: { id: NavId; label: string; icon: LucideIcon; disabled?: boolean }[] = [
-  { id: "home", label: "Home", icon: House },
-  { id: "customers", label: "Customers", icon: FileText },
-  { id: "scan", label: "Scan", icon: ScanLine },
-  { id: "ask", label: "Ask", icon: MessageSquare },
-];
-
 export function BottomNav({ active, onChange }: { active: NavId; onChange: (id: NavId) => void }) {
+  const { t } = useLanguage();
+  const navItems: { id: NavId; label: string; icon: LucideIcon; disabled?: boolean }[] = [
+    { id: "home", label: t("nav_home"), icon: House },
+    { id: "customers", label: t("nav_customers"), icon: FileText },
+    { id: "scan", label: t("nav_scan"), icon: ScanLine },
+    { id: "ask", label: t("nav_ask"), icon: MessageSquare },
+  ];
+
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto grid h-16 max-w-md grid-cols-4">
-        {NAV.map(({ id, label, icon: Icon, disabled }) => {
+        {navItems.map(({ id, label, icon: Icon, disabled }) => {
           const isActive = id === active;
           return (
             <button

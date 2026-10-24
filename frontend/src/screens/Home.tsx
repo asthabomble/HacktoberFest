@@ -7,6 +7,7 @@ import { StockList } from "./Stock";
 import { Card, Chip, PrimaryButton, Tabs } from "../components/ui";
 import { apiGet, type CustomerList, type CustomerSummary, type Overview } from "../lib/api";
 import { formatRupees, formatToday } from "../lib/format";
+import { useLanguage } from "../lib/language";
 
 export type HomeTab = "overview" | "udhaar" | "stock" | "alerts";
 
@@ -37,6 +38,7 @@ export default function Home({
   onScan: (mode: ScanMode) => void;
   onViewAll: () => void;
 }) {
+  const { t } = useLanguage();
   const [tab, setTab] = useState<HomeTab>(initialTab);
   const [data, setData] = useState<Overview | null>(null);
   const [all, setAll] = useState<CustomerList | null>(null);
@@ -68,8 +70,8 @@ export default function Home({
             <span className="shrink-0 text-sm text-muted">{formatToday()}</span>
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Chip>{data?.customer_count ?? 0} customers</Chip>
-            {loadedAt && <Chip tone="gray">Updated {loadedAt}</Chip>}
+            <Chip>{t("customers_chip", { count: data?.customer_count ?? 0 })}</Chip>
+            {loadedAt && <Chip tone="gray">{t("updated_chip", { time: loadedAt })}</Chip>}
           </div>
         </div>
       </div>
@@ -78,30 +80,30 @@ export default function Home({
         active={tab}
         onChange={setTab}
         tabs={[
-          { id: "overview", label: "Overview" },
-          { id: "udhaar", label: "Udhaar" },
-          { id: "stock", label: "Stock" },
-          { id: "alerts", label: "Alerts", badge: totalAlertsCount },
+          { id: "overview", label: t("tab_overview") },
+          { id: "udhaar", label: t("tab_udhaar") },
+          { id: "stock", label: t("tab_stock") },
+          { id: "alerts", label: t("tab_alerts"), badge: totalAlertsCount },
         ]}
       />
 
       <div className="mx-auto max-w-md space-y-5 px-4 py-4">
-        {error && <p className="text-sm text-danger">Server se data nahi mila: {error}</p>}
+        {error && <p className="text-sm text-danger">Server error: {error}</p>}
 
         {tab === "overview" && (
           <>
             <Card className="grid grid-cols-2">
-              <Stat label="Total outstanding" value={formatRupees(data?.total_outstanding ?? 0)} className="border-b border-r" />
-              <Stat label="Udhaar today" value={formatRupees(data?.udhaar_today ?? 0)} className="border-b" />
-              <Stat label={`Overdue ${data?.overdue_days ?? 30}+ days`} value={String(data?.overdue_count ?? 0)} tone="red" className="border-r" />
-              <Stat label="Low stock items" value={data?.low_stock_count == null ? "—" : String(data.low_stock_count)} tone="brown" />
+              <Stat label={t("total_outstanding")} value={formatRupees(data?.total_outstanding ?? 0)} className="border-b border-r" />
+              <Stat label={t("udhaar_today")} value={formatRupees(data?.udhaar_today ?? 0)} className="border-b" />
+              <Stat label={t("overdue_label", { days: data?.overdue_days ?? 30 })} value={String(data?.overdue_count ?? 0)} tone="red" className="border-r" />
+              <Stat label={t("low_stock_items")} value={data?.low_stock_count == null ? "—" : String(data.low_stock_count)} tone="brown" />
             </Card>
 
             <Card>
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h3 className="text-lg font-semibold">Top debtors</h3>
+                <h3 className="text-lg font-semibold">{t("top_debtors")}</h3>
                 <button onClick={onViewAll} className="font-medium text-brand">
-                  View all
+                  {t("view_all")}
                 </button>
               </div>
               {data && data.top_debtors.length > 0 ? (
@@ -112,12 +114,12 @@ export default function Home({
                   onReminder={(c) => setReminderCustomer(c)}
                 />
               ) : (
-                <Empty>Abhi koi udhaar nahi. Pehla khata page scan karein.</Empty>
+                <Empty>{t("empty_no_debtors")}</Empty>
               )}
             </Card>
 
             <PrimaryButton icon={Camera} onClick={() => onScan("khata")} className="w-full">
-              Scan khata page
+              {t("scan_khata_btn")}
             </PrimaryButton>
           </>
         )}
@@ -133,7 +135,7 @@ export default function Home({
                 action="chevron"
               />
             ) : (
-              <Empty>Kisi ka udhaar baaki nahi.</Empty>
+              <Empty>{t("empty_all_settled")}</Empty>
             )}
           </Card>
         )}
@@ -146,9 +148,9 @@ export default function Home({
           <>
             <Card>
               <div className="border-b border-line px-4 py-3">
-                <h3 className="text-lg font-semibold">Overdue udhaar</h3>
+                <h3 className="text-lg font-semibold">{t("tab_alerts")}</h3>
                 <p className="text-sm text-muted">
-                  {data?.overdue_days ?? 30}+ din se koi payment nahi aaya
+                  {t("overdue_subtext", { days: data?.overdue_days ?? 30 })}
                 </p>
               </div>
               {overdue.length > 0 ? (
@@ -159,7 +161,7 @@ export default function Home({
                   onReminder={(c) => setReminderCustomer(c)}
                 />
               ) : (
-                <Empty>Koi overdue nahi. Sab theek hai.</Empty>
+                <Empty>{t("empty_no_overdue")}</Empty>
               )}
             </Card>
 

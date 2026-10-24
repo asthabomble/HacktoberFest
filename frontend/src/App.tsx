@@ -6,6 +6,7 @@ import Home, { type HomeTab } from "./screens/Home";
 import Scan, { type ScanMode } from "./screens/Scan";
 import Poocho from "./screens/Poocho";
 import ProductDetail from "./screens/Stock";
+import Welcome from "./screens/Welcome";
 
 type MainRoute = { name: "home"; tab?: HomeTab } | { name: "customers"; focusSearch?: boolean };
 type Route =
@@ -16,12 +17,15 @@ type Route =
   | { name: "ask" };
 
 export default function App() {
+  const [enteredDemo, setEnteredDemo] = useState(false);
   const [route, setRoute] = useState<Route>({ name: "home" });
   const [toast, setToast] = useState("");
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [route]);
+
+  if (!enteredDemo) return <Welcome onEnterDemo={() => setEnteredDemo(true)} />;
 
   function showToast(text: string) {
     setToast(text);

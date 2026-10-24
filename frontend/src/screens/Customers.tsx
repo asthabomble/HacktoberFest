@@ -4,8 +4,10 @@ import CustomerTable from "../components/CustomerTable";
 import { Card } from "../components/ui";
 import { apiGet, type CustomerList } from "../lib/api";
 import { formatRupees } from "../lib/format";
+import { useLanguage } from "../lib/language";
 
 export default function Customers({ onOpen, focusSearch }: { onOpen: (id: number) => void; focusSearch?: boolean }) {
+  const { t } = useLanguage();
   const [data, setData] = useState<CustomerList | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -28,9 +30,12 @@ export default function Customers({ onOpen, focusSearch }: { onOpen: (id: number
       <div className="border-b border-line bg-white">
         <div className="mx-auto max-w-md px-4 py-3">
           <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-semibold">Customers</h2>
+            <h2 className="text-xl font-semibold">{t("customers_title")}</h2>
             <span className="text-sm text-muted">
-              {data?.customers.length ?? 0} total · {formatRupees(data?.total_outstanding ?? 0)} due
+              {t("customers_summary", {
+                count: data?.customers.length ?? 0,
+                due: formatRupees(data?.total_outstanding ?? 0),
+              })}
             </span>
           </div>
           <div className="relative mt-3">
@@ -39,7 +44,7 @@ export default function Customers({ onOpen, focusSearch }: { onOpen: (id: number
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Naam se dhoondo"
+              placeholder={t("search_placeholder")}
               className="w-full border-b-2 border-line bg-soft py-2.5 pl-10 pr-3 text-[15px] outline-none placeholder:text-muted focus:border-brand"
             />
           </div>
@@ -53,7 +58,7 @@ export default function Customers({ onOpen, focusSearch }: { onOpen: (id: number
             <CustomerTable customers={customers} overdueDays={data!.overdue_days} onOpen={onOpen} action="chevron" />
           ) : (
             <p className="px-4 py-8 text-center text-muted">
-              {data?.customers.length ? "Is naam ka koi customer nahi." : "Abhi koi customer nahi. Khata page scan karein."}
+              {data?.customers.length ? t("no_customer_found") : t("no_customers_start")}
             </p>
           )}
         </Card>

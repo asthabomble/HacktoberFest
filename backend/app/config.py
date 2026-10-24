@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     google_model: str = "gemma-4-26b-a4b-it"
     google_thinking_level: str = "minimal"  # Gemma 4 thinks before answering; "" = model default (slower)
 
+    # Google OAuth web client. Keep the client secret server-side only.
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "gemma3:4b"
 
