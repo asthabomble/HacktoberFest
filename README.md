@@ -8,7 +8,10 @@ Marathi, get alerts, and send WhatsApp reminders.
 ```
 /backend    FastAPI + SQLModel (SQLite) + Gemma service
 /frontend   React + TypeScript + Tailwind (mobile-first PWA)
+/docs       Guides
 ```
+
+**Quick start, including opening it on your phone over Wi-Fi: [docs/RUNNING.md](docs/RUNNING.md)**
 
 ## Prerequisites
 

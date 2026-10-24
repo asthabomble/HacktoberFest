@@ -51,10 +51,11 @@ class GoogleAIStudio:
     name = "google"
     base_url = "https://generativelanguage.googleapis.com/v1beta"
 
-    def __init__(self, api_key: str, model: str, timeout: float):
+    def __init__(self, api_key: str, model: str, timeout: float, thinking_level: str = ""):
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
+        self.thinking_level = thinking_level
 
     def _headers(self) -> dict:
         return {"x-goog-api-key": self.api_key}
@@ -66,7 +67,10 @@ class GoogleAIStudio:
         for img in images:
             parts.append({"inline_data": {"mime_type": _mime_type(img), "data": _b64(img)}})
         # Gemma on AI Studio doesn't support JSON mode, so json_mode is handled by the prompt.
-        body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": {"temperature": 0.1}}
+        config: dict = {"temperature": 0.1}
+        if self.thinking_level:
+            config["thinkingConfig"] = {"thinkingLevel": self.thinking_level}
+        body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": config}
         url = f"{self.base_url}/models/{self.model}:generateContent"
 
         max_attempts = 3
@@ -90,6 +94,12 @@ class GoogleAIStudio:
                 backoff *= 2.0
                 continue
 
+            # AI Studio returns occasional transient 5xx ("Internal error encountered"); retry those too
+            if res.status_code in (500, 502, 503, 504) and attempt < max_attempts - 1:
+                await asyncio.sleep(backoff)
+                backoff *= 1.5
+                continue
+
             if res.status_code != 200:
                 raise GemmaError(f"Google AI Studio error {res.status_code}: {res.text[:300]}")
             break
@@ -99,7 +109,8 @@ class GoogleAIStudio:
 
         try:
             parts_out = res.json()["candidates"][0]["content"]["parts"]
-            return "".join(p.get("text", "") for p in parts_out)
+            # Gemma 4 also returns its reasoning as parts marked "thought": true; keep only the answer
+            return "".join(p.get("text", "") for p in parts_out if not p.get("thought"))
         except (KeyError, IndexError) as e:
             raise GemmaError(f"Unexpected response from Google AI Studio: {res.text[:300]}") from e
 
@@ -161,7 +172,7 @@ def get_provider() -> Provider:
     s = get_settings()
     if s.ai_provider == "ollama":
         return Ollama(s.ollama_base_url, s.ollama_model, s.ai_timeout_seconds)
-    return GoogleAIStudio(s.google_api_key, s.google_model, s.ai_timeout_seconds)
+    return GoogleAIStudio(s.google_api_key, s.google_model, s.ai_timeout_seconds, s.google_thinking_level)
 
 
 def _extract_json(text: str) -> str:
