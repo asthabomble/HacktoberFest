@@ -45,6 +45,7 @@ def seed():
         last_week = today - dt.timedelta(days=7)
         first_of_month = today.replace(day=1)
         two_weeks_ago = today - dt.timedelta(days=14)
+        forty_days_ago = today - dt.timedelta(days=40)
 
         # 1. Customers
         customers_data = [
@@ -169,14 +170,14 @@ def seed():
             )
         )
 
-        # Sunita Bai: gave 450 (last week) -> net owes 450
+        # Sunita Bai: gave 450 (40 days ago) -> net owes 450 (overdue)
         session.add(
             CreditEntry(
                 shop_id=shop.id,
                 customer_id=customer_map["Sunita Bai"].id,
                 amount=450.0,
                 type=CreditType.gave,
-                entry_date=last_week,
+                entry_date=forty_days_ago,
                 raw_text="मसाला + चायपत्ती 450",
                 confidence=Confidence.high,
                 confirmed=True,
