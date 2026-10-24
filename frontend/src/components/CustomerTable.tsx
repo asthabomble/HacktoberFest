@@ -7,11 +7,13 @@ export default function CustomerTable({
   customers,
   overdueDays,
   onOpen,
+  onReminder,
   action = "message",
 }: {
   customers: CustomerSummary[];
   overdueDays: number;
   onOpen: (id: number) => void;
+  onReminder?: (customer: CustomerSummary) => void;
   action?: "message" | "chevron";
 }) {
   return (
@@ -37,7 +39,19 @@ export default function CustomerTable({
             </td>
             <td className="py-3.5 pr-3 text-right text-brand">
               {action === "message" ? (
-                <MessageCircle size={20} className="ml-auto" />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    if (onReminder) {
+                      e.stopPropagation();
+                      onReminder(c);
+                    }
+                  }}
+                  aria-label={`Send reminder to ${c.name}`}
+                  className="ml-auto flex items-center justify-center p-1 text-brand hover:text-brand-strong"
+                >
+                  <MessageCircle size={20} />
+                </button>
               ) : (
                 <ChevronRight size={20} className="ml-auto text-muted" />
               )}

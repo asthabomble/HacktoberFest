@@ -72,6 +72,50 @@ export type CustomerList = { total_outstanding: number; overdue_days: number; cu
 
 export type Shop = { id: number; name: string; owner_name: string | null; language: string };
 
+export type LowStockAlert = {
+  product_id: number;
+  product_name: string;
+  unit: string;
+  current_stock: number;
+  threshold: number;
+  shortage: number;
+  message: string;
+};
+
+export type OverdueAlert = {
+  customer_id: number;
+  customer_name: string;
+  phone: string | null;
+  balance: number;
+  days_due: number;
+  overdue_days_threshold: number;
+  last_payment: { amount: number; date: string } | null;
+  last_entry: string | null;
+  message: string;
+};
+
+export type AlertsResponse = {
+  low_stock_alerts: LowStockAlert[];
+  overdue_udhaar_alerts: OverdueAlert[];
+  total_alerts: number;
+  low_stock_count: number;
+  overdue_count: number;
+  overdue_days: number;
+};
+
+export type DraftReminderResponse = {
+  customer_id: number;
+  customer_name: string;
+  phone: string | null;
+  normalized_phone: string | null;
+  is_phone_valid: boolean;
+  balance: number;
+  language: string;
+  message: string;
+  whatsapp_url: string | null;
+  is_fallback: boolean;
+};
+
 export type Overview = {
   shop: Shop;
   customer_count: number;
@@ -82,6 +126,8 @@ export type Overview = {
   low_stock_count: number | null;
   shorthand_count: number;
   top_debtors: CustomerSummary[];
+  low_stock_alerts?: LowStockAlert[];
+  overdue_alerts?: OverdueAlert[];
 };
 
 export type LedgerEntry = {

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import db_ok, init_db
-from app.routers import chat, customers, khata, stock
+from app.routers import alerts, chat, customers, khata, stock
 from app.services import gemma
 
 
@@ -30,6 +30,7 @@ app.include_router(khata.router)
 app.include_router(customers.router)
 app.include_router(stock.router)
 app.include_router(chat.router)
+app.include_router(alerts.router)
 
 # Uploaded photos, so the confirm screen and ledger can show the source image
 Path("uploads").mkdir(exist_ok=True)

@@ -6,6 +6,7 @@ from app.db import get_session, get_shop
 from app.models import CreditEntry, Customer, ShorthandKind, ShorthandMap
 from app.services import shorthand
 from app.services.names import name_key, name_score
+from app.services.alerts import get_low_stock_alerts, get_overdue_udhaar_alerts
 from app.services.ledger import OVERDUE_DAYS, confirmed_entries, customer_summaries, overview, summarize, with_running_balance
 
 router = APIRouter(prefix="/api", tags=["customers"])
@@ -15,7 +16,10 @@ router = APIRouter(prefix="/api", tags=["customers"])
 def get_overview(session: Session = Depends(get_session)):
     """Everything the home screen needs in one call."""
     shop = get_shop(session)
-    return {"shop": shop, **overview(session, shop.id)}
+    data = overview(session, shop.id)
+    data["low_stock_alerts"] = get_low_stock_alerts(session, shop.id)
+    data["overdue_alerts"] = get_overdue_udhaar_alerts(session, shop.id, data.get("overdue_days", OVERDUE_DAYS))
+    return {"shop": shop, **data}
 
 
 @router.get("/customers")

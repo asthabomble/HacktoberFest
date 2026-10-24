@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Camera } from "lucide-react";
 import CustomerTable from "../components/CustomerTable";
+import ReminderSheet from "../components/ReminderSheet";
 import type { ScanMode } from "./Scan";
 import { StockList } from "./Stock";
 import { Card, Chip, PrimaryButton, Tabs } from "../components/ui";
-import { apiGet, type CustomerList, type Overview } from "../lib/api";
+import { apiGet, type CustomerList, type CustomerSummary, type Overview } from "../lib/api";
 import { formatRupees, formatToday } from "../lib/format";
 
 export type HomeTab = "overview" | "udhaar" | "stock" | "alerts";
@@ -41,6 +42,7 @@ export default function Home({
   const [all, setAll] = useState<CustomerList | null>(null);
   const [error, setError] = useState("");
   const [loadedAt, setLoadedAt] = useState("");
+  const [reminderCustomer, setReminderCustomer] = useState<CustomerSummary | null>(null);
 
   useEffect(() => {
     Promise.all([apiGet<Overview>("/api/overview"), apiGet<CustomerList>("/api/customers")])
@@ -54,6 +56,8 @@ export default function Home({
 
   const owing = (all?.customers ?? []).filter((c) => c.balance > 0);
   const overdue = owing.filter((c) => c.days_due >= (data?.overdue_days ?? 30));
+  const lowStockAlerts = data?.low_stock_alerts ?? [];
+  const totalAlertsCount = overdue.length + lowStockAlerts.length;
 
   return (
     <>
@@ -77,7 +81,7 @@ export default function Home({
           { id: "overview", label: "Overview" },
           { id: "udhaar", label: "Udhaar" },
           { id: "stock", label: "Stock" },
-          { id: "alerts", label: "Alerts", badge: overdue.length },
+          { id: "alerts", label: "Alerts", badge: totalAlertsCount },
         ]}
       />
 
@@ -101,7 +105,12 @@ export default function Home({
                 </button>
               </div>
               {data && data.top_debtors.length > 0 ? (
-                <CustomerTable customers={data.top_debtors} overdueDays={data.overdue_days} onOpen={onOpenCustomer} />
+                <CustomerTable
+                  customers={data.top_debtors}
+                  overdueDays={data.overdue_days}
+                  onOpen={onOpenCustomer}
+                  onReminder={(c) => setReminderCustomer(c)}
+                />
               ) : (
                 <Empty>Abhi koi udhaar nahi. Pehla khata page scan karein.</Empty>
               )}
@@ -116,7 +125,13 @@ export default function Home({
         {tab === "udhaar" && (
           <Card>
             {owing.length > 0 ? (
-              <CustomerTable customers={owing} overdueDays={all!.overdue_days} onOpen={onOpenCustomer} action="chevron" />
+              <CustomerTable
+                customers={owing}
+                overdueDays={all!.overdue_days}
+                onOpen={onOpenCustomer}
+                onReminder={(c) => setReminderCustomer(c)}
+                action="chevron"
+              />
             ) : (
               <Empty>Kisi ka udhaar baaki nahi.</Empty>
             )}
@@ -128,21 +143,72 @@ export default function Home({
         )}
 
         {tab === "alerts" && (
-          <Card>
-            <div className="border-b border-line px-4 py-3">
-              <h3 className="text-lg font-semibold">Overdue udhaar</h3>
-              <p className="text-sm text-muted">
-                {data?.overdue_days ?? 30}+ din se koi payment nahi aaya
-              </p>
-            </div>
-            {overdue.length > 0 ? (
-              <CustomerTable customers={overdue} overdueDays={all!.overdue_days} onOpen={onOpenCustomer} />
-            ) : (
-              <Empty>Koi overdue nahi. Sab theek hai.</Empty>
-            )}
-          </Card>
+          <>
+            <Card>
+              <div className="border-b border-line px-4 py-3">
+                <h3 className="text-lg font-semibold">Overdue udhaar</h3>
+                <p className="text-sm text-muted">
+                  {data?.overdue_days ?? 30}+ din se koi payment nahi aaya
+                </p>
+              </div>
+              {overdue.length > 0 ? (
+                <CustomerTable
+                  customers={overdue}
+                  overdueDays={all!.overdue_days}
+                  onOpen={onOpenCustomer}
+                  onReminder={(c) => setReminderCustomer(c)}
+                />
+              ) : (
+                <Empty>Koi overdue nahi. Sab theek hai.</Empty>
+              )}
+            </Card>
+
+            <Card>
+              <div className="border-b border-line px-4 py-3">
+                <h3 className="text-lg font-semibold">Low stock items</h3>
+                <p className="text-sm text-muted">Configured threshold se kam quantity bachi hai</p>
+              </div>
+              {lowStockAlerts.length > 0 ? (
+                <div className="divide-y divide-line">
+                  {lowStockAlerts.map((item) => (
+                    <div
+                      key={item.product_id}
+                      onClick={() => onOpenProduct(item.product_id)}
+                      className="flex cursor-pointer items-center justify-between px-4 py-3 active:bg-soft"
+                    >
+                      <div className="min-w-0 pr-3">
+                        <p className="truncate font-semibold text-ink text-[15px]">{item.product_name}</p>
+                        <p className="text-xs text-muted">
+                          Threshold: {item.threshold} {item.unit}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-mono text-base font-semibold text-danger">
+                          {item.current_stock} {item.unit}
+                        </p>
+                        <span className="text-xs font-medium text-danger">Low stock</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty>Sabhi products ka stock theek hai.</Empty>
+              )}
+            </Card>
+          </>
         )}
       </div>
+
+      {reminderCustomer && (
+        <ReminderSheet
+          customerId={reminderCustomer.id}
+          customerName={reminderCustomer.name}
+          balance={reminderCustomer.balance}
+          phone={reminderCustomer.phone}
+          initialLanguage={data?.shop.language || "hi"}
+          onClose={() => setReminderCustomer(null)}
+        />
+      )}
     </>
   );
 }

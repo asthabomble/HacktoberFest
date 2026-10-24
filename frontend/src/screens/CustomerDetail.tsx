@@ -1,17 +1,10 @@
 import { useEffect, useState } from "react";
 import { Combine, MessageCircle, X } from "lucide-react";
+import ReminderSheet from "../components/ReminderSheet";
 import { BottomBar, Card, Chip, OutlineButton, PrimaryButton, SubHeader, Tabs } from "../components/ui";
 import { apiGet, apiPost, imageUrl, type CreditType, type Ledger, type SimilarCustomer } from "../lib/api";
 import { formatDate, formatNumber, formatRupees, initials, today } from "../lib/format";
-
 type DetailTab = "entries" | "summary" | "reminders" | "photos";
-
-// Simple template for now; Phase 4 swaps this for a Gemma-drafted message in the customer's language.
-function reminderLink(name: string, balance: number, phone: string | null) {
-  const text = `Namaste ${name} ji, aapka ${formatRupees(balance)} ka hisaab baaki hai. Jab suvidha ho, chuka dijiye. Dhanyavaad!`;
-  const number = phone?.replace(/\D/g, "") ?? "";
-  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
-}
 
 function AddEntrySheet({ customerName, onClose, onSaved }: { customerName: string; onClose: () => void; onSaved: () => void }) {
   const [amount, setAmount] = useState("");
@@ -90,7 +83,8 @@ export default function CustomerDetail({ id, onBack }: { id: number; onBack: () 
   const [error, setError] = useState("");
   const [tab, setTab] = useState<DetailTab>("entries");
   const [adding, setAdding] = useState(false);
-  const [similar, setSimilar] = useState<SimilarCustomer[]>([]);
+const [similar, setSimilar] = useState<SimilarCustomer[]>([]);
+const [reminderOpen, setReminderOpen] = useState(false);
 
   function load() {
     apiGet<Ledger>(`/api/customers/${id}/ledger`)
@@ -149,7 +143,7 @@ export default function CustomerDetail({ id, onBack }: { id: number; onBack: () 
             tabs={[
               { id: "entries", label: "Entries" },
               { id: "summary", label: "Summary", disabled: true },
-              { id: "reminders", label: "Reminders", disabled: true }, // Phase 4
+              { id: "reminders", label: "Reminders" },
               { id: "photos", label: "Photos" },
             ]}
           />
@@ -223,6 +217,40 @@ export default function CustomerDetail({ id, onBack }: { id: number; onBack: () 
               </>
             )}
 
+            {tab === "reminders" && (
+              <Card className="p-4 space-y-4">
+                <div className="flex items-start justify-between border-b border-line pb-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-ink">WhatsApp reminders</h3>
+                    <p className="text-xs text-muted">Polite payment reminder drafted via Gemma</p>
+                  </div>
+                  <Chip tone="gray">Phase 4</Chip>
+                </div>
+
+                <div className="border border-line bg-soft p-3 rounded">
+                  <p className="text-xs text-muted mb-1 font-medium">CURRENT OUTSTANDING</p>
+                  <p className="font-mono text-2xl font-bold text-brand">{formatRupees(c.balance)}</p>
+                  <p className="text-xs text-muted mt-1">
+                    Phone: {c.phone ? <span className="font-mono text-ink font-medium">{c.phone}</span> : <span className="text-danger font-medium">Missing</span>}
+                  </p>
+                </div>
+
+                {c.balance > 0 ? (
+                  <PrimaryButton
+                    icon={MessageCircle}
+                    onClick={() => setReminderOpen(true)}
+                    className="w-full"
+                  >
+                    Draft &amp; send WhatsApp reminder
+                  </PrimaryButton>
+                ) : (
+                  <p className="text-center text-sm text-muted py-4">
+                    Is customer ka koi baaki hisaab nahi hai.
+                  </p>
+                )}
+              </Card>
+            )}
+
             {tab === "photos" && (
               <div className="grid grid-cols-2 gap-3">
                 {photos.map((p) => (
@@ -242,7 +270,7 @@ export default function CustomerDetail({ id, onBack }: { id: number; onBack: () 
             {c.balance > 0 ? (
               <PrimaryButton
                 icon={MessageCircle}
-                onClick={() => window.open(reminderLink(c.name, c.balance, c.phone), "_blank")}
+                onClick={() => setReminderOpen(true)}
                 className="flex-1 whitespace-nowrap px-3! text-[15px]!"
               >
                 Send WhatsApp reminder
@@ -262,6 +290,16 @@ export default function CustomerDetail({ id, onBack }: { id: number; onBack: () 
                 setAdding(false);
                 load();
               }}
+            />
+          )}
+
+          {reminderOpen && (
+            <ReminderSheet
+              customerId={c.id}
+              customerName={c.name}
+              balance={c.balance}
+              phone={c.phone}
+              onClose={() => setReminderOpen(false)}
             />
           )}
         </>
