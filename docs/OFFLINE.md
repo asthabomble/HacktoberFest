@@ -91,7 +91,28 @@ python -m scripts.bench_offline --provider ollama --model gemma3:1b --tasks voic
 
 Measured on 24 Oct 2026.
 
-LOCAL_RESULTS_PLACEHOLDER
+**Cloud baseline — Gemma 4 26B (Google AI Studio, `GOOGLE_THINKING_LEVEL=minimal`), two runs:**
+
+| Task | Time per item | Accuracy |
+|---|---|---|
+| Khata photo (3 pages, 12 rows) | 7.5 – 12.1 s (median ~9 s) | 12/12 (100%) both runs |
+| Supplier bill (4 items + total) | ~10 s | 5/5 (100%) |
+| Voice / typed entry (3 sentences) | 2.8 – 5.9 s (median ~3 s) | 4/4 (100%) |
+
+**Local / on-device:** not measured yet. The laptop run (Gemma 3 4B and 1B via Ollama in Docker) was started,
+but the ~5 GB download didn't finish in time. To run it:
+
+```bash
+docker run -d --name hisaab-ollama -p 127.0.0.1:11434:11434 -v hisaab-ollama:/root/.ollama ollama/ollama:0.6.8
+docker exec hisaab-ollama ollama pull gemma3:4b      # image-capable, ~3.3 GB
+docker exec hisaab-ollama ollama pull gemma3:1b      # text-only, ~0.8 GB
+cd backend
+python -m scripts.bench_offline --provider ollama --model gemma3:4b
+python -m scripts.bench_offline --provider ollama --model gemma3:1b --tasks voice
+```
+
+The laptop has no GPU and ~4 GB free RAM, so expect CPU-only times well above a phone with an NPU.
+The phone measurement in section 5 is the number that matters for the pitch.
 
 ### What the benchmark already fixed
 
