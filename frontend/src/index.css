@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/*
+  Theme: retro ledger. Dark ink background, hard 2px borders,
+  offset block shadows, pixel font for labels, mono font for money.
+  Hind covers Devanagari (Hindi/Marathi) and Latin.
+*/
+@theme {
+  --color-ink: #14111f;
+  --color-panel: #1e1a2e;
+  --color-panel-2: #2a2440;
+  --color-line: #3d3560;
+  --color-paper: #f3ead8;
+  --color-muted: #a49cbf;
+
+  --color-marigold: #ffb547; /* primary */
+  --color-mint: #7cf2c0; /* ok / money in */
+  --color-rose: #ff6fa8; /* alert / money out */
+  --color-sky: #8ab4ff;
+
+  --font-sans: "Hind", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-pixel: "Silkscreen", "JetBrains Mono", monospace;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+  }
+  body {
+    min-height: 100dvh;
+    /* faint ledger grid, like a khata page */
+    background-image:
+      linear-gradient(var(--color-panel) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-panel) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+@utility block-shadow {
+  box-shadow: 4px 4px 0 0 var(--color-line);
+}
+
+@utility block-shadow-marigold {
+  box-shadow: 4px 4px 0 0 var(--color-marigold);
+}
+
+@utility press {
+  transition: transform 80ms, box-shadow 80ms;
+  &:active {
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 0 var(--color-line);
+  }
+}
