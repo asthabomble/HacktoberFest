@@ -1,20 +1,53 @@
-# HisaabKitaab
+# HisaabKitaab 📒
 
-Kirana stores keep writing in their paper khata. HisaabKitaab lets them photograph
-khata pages, supplier bills and shelves, and uses **Gemma** (vision + text) to turn
-them into udhaar (credit) and stock records. They can ask questions in Hindi or
-Marathi, get alerts, and send WhatsApp reminders.
+**Your kirana shop's khata, digital without retyping.**
+
+Kirana stores keep udhaar (credit) in a paper khata, in Hindi, Marathi or English, using their own shorthand.
+HisaabKitaab lets the shopkeeper keep writing on paper and just take a photo. **Gemma** (vision + text) reads khata
+pages, supplier bills and shelf photos and turns them into udhaar and stock records. The shopkeeper reviews every
+row before it's saved, can ask questions in Hindi, Marathi or Hinglish, and sends WhatsApp reminders.
+
+> **Gemma reads, code decides.** Every total, balance and alert is calculated in plain Python, never by the AI.
+
+## Screenshots
+
+| Landing | Sign in | Home |
+|---|---|---|
+| <img src="docs/screenshots/landing.png" width="240"> | <img src="docs/screenshots/login.png" width="240"> | <img src="docs/screenshots/home.png" width="240"> |
+| **Customers** | **Stock** | **Scan khata / bill / shelf** |
+| <img src="docs/screenshots/customers.png" width="240"> | <img src="docs/screenshots/stock.png" width="240"> | <img src="docs/screenshots/scan.png" width="240"> |
+| **Ask (Pucho)** | | |
+| <img src="docs/screenshots/ask.png" width="240"> | | |
+
+## Key features
+
+- 📸 **Khata photo → udhaar entries.** Handwritten Hindi/Marathi/English lines become editable rows; unclear rows are highlighted.
+- 🧾 **Supplier bill → stock.** Items, quantities and rates are read; code re-checks the totals and flags mismatches.
+- 🛒 **Shelf photo → low/medium/full** stock alerts (never fake counts).
+- 🗣️ **Ask in your language.** "Aaj ka total udhaar kitna hai?" Answers come from whitelisted queries on your own data, never AI-written SQL.
+- 🎤 **Voice entry.** "Ramesh ko 500 udhaar diya" becomes a row on the review screen.
+- 🧠 **Learns your shorthand.** Correct "Rmsh" → "Ramesh bhau" once and it's remembered; fuzzy matching and duplicate merge.
+- 💬 **WhatsApp reminders**, overdue alerts (30+ days), top debtors, per-customer ledger with source photos.
+- 🌐 **English / Hindi / Marathi / Hinglish UI**, mobile-first PWA, Google sign-in or demo mode.
+
+## Tech stack
+
+| Layer | Tech |
+|---|---|
+| Frontend | React + TypeScript + Vite + Tailwind (mobile-first PWA) |
+| Backend | FastAPI + SQLModel (SQLite, Postgres-ready) |
+| AI | Gemma 4 via Google AI Studio, or Gemma 3 locally via Ollama |
+| Auth | Google Identity Services (ID token verified on the backend) |
 
 ```
 /backend    FastAPI + SQLModel (SQLite) + Gemma service
 /frontend   React + TypeScript + Tailwind (mobile-first PWA)
-/docs       Guides
+/docs       Guides and screenshots
+/samples    Sample khata pages, bill and shelf photos
 ```
 
-**Quick start, including opening it on your phone over Wi-Fi: [docs/demo.md](docs/demo.md)**
-· How it fits together: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-· 3-minute demo: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
-· Offline / on-device Gemma: [docs/OFFLINE.md](docs/OFFLINE.md)
+More: [docs/demo.md](docs/demo.md) (full setup + troubleshooting) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+· [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) · [docs/OFFLINE.md](docs/OFFLINE.md)
 
 ## Prerequisites
 
@@ -24,32 +57,50 @@ Marathi, get alerts, and send WhatsApp reminders.
   - a **Google AI Studio** API key (https://aistudio.google.com/apikey), or
   - **Ollama** running locally with a vision Gemma model: `ollama pull gemma3:4b`
 
-## Run the backend
+## Run the project
+
+**1. Backend** (terminal 1)
 
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # then set GOOGLE_API_KEY, or AI_PROVIDER=ollama
+cp .env.example .env          # set GOOGLE_API_KEY (or AI_PROVIDER=ollama) and GOOGLE_OAUTH_CLIENT_ID
+python -m scripts.seed_demo   # optional: realistic demo data
 uvicorn app.main:app --reload --port 8000
 ```
 
-The SQLite database is created at `backend/data/hisaabkitaab.db` on first start,
-with one demo shop.
+The SQLite database is created at `backend/data/hisaabkitaab.db` on first start. API docs: http://localhost:8000/docs
 
-API docs: http://localhost:8000/docs
-
-## Run the frontend
+**2. Frontend** (terminal 2)
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host         # laptop: http://localhost:5173
 ```
 
-Open http://localhost:5173. The Vite dev server proxies `/api` to the backend,
-so the app works on a phone on the same Wi-Fi too (`npm run dev -- --host`).
+The Vite dev server proxies `/api` and `/uploads` to the backend, so the phone never calls port 8000 directly.
+
+**3. On your phone (same Wi-Fi)** (terminal 3)
+
+```bash
+cd frontend
+npm run dev:https             # https on port 5174 (needed for Google sign-in, camera preview, mic)
+```
+
+1. Find the laptop IP: `hostname -I` (e.g. `192.168.1.23`).
+2. Open **`https://192-168-1-23.nip.io:5174`** on the phone (IP with dashes), tap *Advanced → Proceed* on the certificate warning.
+3. Plain `http://192.168.1.23:5173` also works for data, but Google only allows sign-in on `localhost` or https.
+
+**Phone checklist (if data or sign-in doesn't work):**
+
+| Problem | Fix |
+|---|---|
+| Page/data doesn't load on the phone | Allow the ports through the laptop firewall: `sudo ufw allow 5173/tcp && sudo ufw allow 5174/tcp`. Same Wi-Fi, not a guest network. |
+| Google: "origin is not allowed" / button does nothing | Google Cloud Console → Credentials → your OAuth Web client → **Authorized JavaScript origins** → add `https://<ip-with-dashes>.nip.io:5174` (and `http://localhost:5173`). Wait ~5 min. Re-add if the laptop IP changes. |
+| nip.io link doesn't open | Some routers/Private DNS block it; turn off Android *Private DNS* or use mobile hotspot from the laptop. |
 
 ## Health checks
 
