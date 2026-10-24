@@ -446,6 +446,22 @@ export default function Scan({
       .catch(() => {});
   }, []);
 
+  async function readBill(image: Blob): Promise<boolean> {
+    const res = await apiUpload<BillExtractResponse>("/api/stock/bills/extract", image, "bill.jpg");
+    setBill(res);
+    setSupplierName(res.supplier_name ?? "");
+    setBillDate(res.bill_date ?? today());
+    const items = res.items.map((it) => ({
+      ...it,
+      key: nextKey++,
+      selectedProductId: it.suggested_product_id ?? ("new" as const),
+      customName: it.suggested_product_name ?? it.item_name,
+    }));
+    setBillItems(items.length ? items : [blankBillItem()]);
+    setStage({ name: "review_bill", sourceImage: res.source_image });
+    return items.length > 0;
+  }
+
   async function read(image: Blob, preview: string) {
     setStage({ name: "reading", preview });
     setFilter("all");
@@ -453,21 +469,19 @@ export default function Scan({
       if (mode === "khata") {
         const res = await apiUpload<ExtractResponse>("/api/khata/extract", image, "khata.jpg");
         const extracted = res.rows.map((r) => ({ ...r, date: r.date ?? today(), key: nextKey++, suggestedName: r.customer_name }));
-        setRows(extracted.length ? extracted : [blankRow()]);
-        setStage({ name: "review_khata", sourceImage: res.source_image });
+        if (extracted.length) {
+          setRows(extracted);
+          setStage({ name: "review_khata", sourceImage: res.source_image });
+          return;
+        }
+        // No customer entries: an item list with prices is usually a supplier bill, so read it as one
+        if (await readBill(image)) {
+          setMode("bill");
+          return;
+        }
+        setStage({ name: "capture", error: t("Is photo mein koi entry nahi mili. Saaf photo lijiye, ya Supplier Bill / Shelf mode chuniye.") });
       } else if (mode === "bill") {
-        const res = await apiUpload<BillExtractResponse>("/api/stock/bills/extract", image, "bill.jpg");
-        setBill(res);
-        setSupplierName(res.supplier_name ?? "");
-        setBillDate(res.bill_date ?? today());
-        const items = res.items.map((it) => ({
-          ...it,
-          key: nextKey++,
-          selectedProductId: it.suggested_product_id ?? ("new" as const),
-          customName: it.suggested_product_name ?? it.item_name,
-        }));
-        setBillItems(items.length ? items : [blankBillItem()]);
-        setStage({ name: "review_bill", sourceImage: res.source_image });
+        await readBill(image);
       } else {
         const res = await apiUpload<ShelfAssessResponse>("/api/stock/shelf/assess", image, "shelf.jpg");
         setShelfItems(
