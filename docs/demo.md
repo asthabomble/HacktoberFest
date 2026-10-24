@@ -106,38 +106,42 @@ http://localhost:5173
 
    Or just copy the **Network:** URL that Vite prints.
 3. On the phone's browser open `http://<laptop-ip>:5173`, e.g. `http://192.168.1.23:5173`.
+   Data, scanning (via the phone's camera app), Pucho and typed voice entries all work here.
 4. Optional: browser menu → **Add to Home screen** to open it like an app.
 
-#### Camera on the phone
+#### Full features on the phone: the https link
 
-Phone browsers only allow the **live camera preview** on `https` or `localhost`.
-Over `http://192.168…` the scan screen shows a placeholder instead, and that's expected:
+Phone browsers only allow **Google sign-in, the live camera preview and the mic** on https. Start a second,
+https copy of the frontend (keep the normal one running for the laptop):
 
-- **Capture** opens the phone's own camera app; take the photo and it uploads.
-- **Gallery** picks an existing photo.
+```bash
+cd frontend
+npm run dev:https          # https on port 5174, self-signed certificate
+```
 
-Both work over plain Wi-Fi. The live preview works on the laptop at `localhost`.
+On the phone open **`https://<laptop-ip-with-dashes>.nip.io:5174`**, e.g. for `192.168.1.23`:
+`https://192-168-1-23.nip.io:5174`. ([nip.io](https://nip.io) is a public name that points back to that IP,
+so nothing leaves your Wi-Fi.)
 
-#### Voice on the phone
-
-Voice entry (🎤 on the scan screen, **+ Entry** on a customer) and spoken Pucho questions use the
-browser's speech recognition (Chrome / Android). Like the camera preview, phone browsers usually only
-allow the mic on `https` or `localhost`, so over `http://192.168…` the mic button may say permission was
-denied. **Typing works everywhere**: the voice sheet has a text box ("Ramesh ko 500 udhaar diya") that
-goes through the same Gemma step. On the laptop at `localhost`, the mic works in Chrome.
+- The first time, the browser warns that the certificate isn't trusted (it's self-signed):
+  tap **Advanced → Proceed**.
+- The login page on the plain `http://192.168…` address shows this https link for you.
 
 #### Google sign-in
 
-1. In Google Cloud Console → APIs & Services → Credentials, create an **OAuth client ID** of type
-   *Web application*, and add `http://localhost:5173` under **Authorized JavaScript origins**.
+1. In Google Cloud Console → APIs & Services → Credentials, open (or create) the **OAuth client ID**
+   (*Web application*). Under **Authorized JavaScript origins** add:
+   - `http://localhost:5173` (laptop)
+   - `https://<laptop-ip-with-dashes>.nip.io:5174` (phone), e.g. `https://192-168-1-23.nip.io:5174`
+
+   Changes can take a few minutes to apply. If the laptop's Wi-Fi IP changes, add the new address too.
 2. Put the client ID in `backend/.env` as `GOOGLE_OAUTH_CLIENT_ID=…` and restart the backend.
    The frontend reads it from the backend (`/api/auth/config`), so `frontend/.env` is optional.
-3. Open http://localhost:5173 → **Log in** → **Continue with Google**.
+3. Laptop: http://localhost:5173 → **Log in** → **Continue with Google**.
+   Phone: the https link above → **Log in** → **Continue with Google**.
 
-Google only accepts `http://localhost` or **https** addresses, never `http://192.168…`. So on the phone over
-Wi-Fi the Google button won't work (the login page says so and offers **Explore the demo**). To use Google
-sign-in on a phone, serve the app over an https link (for example a tunnel such as `cloudflared tunnel --url
-http://localhost:5173`) and add that https address as another Authorized JavaScript origin.
+Google never accepts `http://192.168…`. On that address the login page explains this and links to the https
+version or **Explore the demo**.
 
 The email/password form on the login page isn't connected to accounts yet.
 
@@ -223,7 +227,8 @@ python -m scripts.eval_khata samples/        # khata accuracy on your own photos
 | Frontend shows "Server se data nahi mila" | Backend isn't running. Start Terminal 1. |
 | Mic button greyed out | Browser has no speech recognition (e.g. Firefox). Use Chrome, or type in the voice box. |
 | "Mic ki permission nahi mili" on the phone | Phones need `https` for the mic. Type instead, or use the laptop at `localhost`. |
-| Google button does nothing / "origin is not allowed" | You're on a `http://192.168…` address. Use `localhost` on the laptop, or an https link added to the OAuth client's Authorized JavaScript origins. |
+| Google button does nothing / "origin is not allowed" | On the phone use the https nip.io link (`npm run dev:https`) and add it to the OAuth client's Authorized JavaScript origins; wait a few minutes after adding. |
+| Phone shows no numbers / "Server se data nahi mila" | The backend or Vite isn't running on the laptop (or the laptop slept). Start both terminals again; check the IP with `hostname -I`. |
 | Login says Google sign-in isn't set up | Add `GOOGLE_OAUTH_CLIENT_ID` to `backend/.env` and restart the backend. |
 | `seed_demo` says the database already has customers | That's the safety check. Use `DATABASE_URL=sqlite:///./data/demo.db …` or add `--yes`. |
 

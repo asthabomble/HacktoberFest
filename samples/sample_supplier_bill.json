@@ -1,0 +1,6 @@
+{"items": [
+  {"item_name": "Tata Salt 1kg", "quantity": 20, "rate": 24, "line_total": 480},
+  {"item_name": "Fortune Oil 1L", "quantity": 10, "rate": 135, "line_total": 1350},
+  {"item_name": "Parle-G Biscuits", "quantity": 30, "rate": 25, "line_total": 750},
+  {"item_name": "Sugar / Cheeni 50kg bag", "quantity": 1, "rate": 2100, "line_total": 2100}
+], "bill_total": 4680}

@@ -185,7 +185,19 @@ def _extract_json(text: str) -> str:
         return text.strip()
     start = min(starts)
     end = max(text.rfind("}"), text.rfind("]"))
-    return text[start : end + 1]
+    return _fix_invalid_escapes(text[start : end + 1])
+
+
+def _fix_invalid_escapes(text: str) -> str:
+    """Models sometimes escape characters JSON doesn't allow escaping ("ch\\+tel", "\\—").
+    Keep valid escapes (\\n, \\", \\\\, \\u0930 …) as they are; make other backslashes literal."""
+    def fix(m: re.Match) -> str:
+        esc = m.group(1)
+        valid = esc in '"\\/bfnrt' or re.fullmatch(r"u[0-9a-fA-F]{4}", esc)
+        return m.group(0) if valid else "\\\\" + esc
+
+    # \uXXXX needs exactly 4 hex digits; "\u092" (cut short) becomes literal text instead of breaking the reply
+    return re.sub(r'\\(u[0-9a-fA-F]{4}|.)', fix, text, flags=re.DOTALL)
 
 
 async def generate_text(prompt: str, images: list[bytes] | None = None) -> str:
@@ -197,7 +209,8 @@ async def generate_json(prompt: str, schema: type[T], images: list[bytes] | None
     provider = get_provider()
     full_prompt = (
         f"{prompt}\n\n"
-        "Reply with ONLY valid JSON (no markdown, no explanation) matching this JSON schema:\n"
+        "Reply with ONLY valid JSON (no markdown, no explanation) matching this JSON schema. "
+        "Write Hindi/Marathi text directly as UTF-8 characters, never as \\u escapes:\n"
         f"{json.dumps(schema.model_json_schema(), ensure_ascii=False)}"
     )
     last_error = ""

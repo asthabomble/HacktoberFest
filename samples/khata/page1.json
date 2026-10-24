@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {
+      "customer_name": "Rmsh",
+      "amount": 450,
+      "type": "gave"
+    },
+    {
+      "customer_name": "सुनीता ताई",
+      "amount": 320,
+      "type": "gave"
+    },
+    {
+      "customer_name": "Iqbl",
+      "amount": 1000,
+      "type": "got"
+    },
+    {
+      "customer_name": "Pappu dhaba",
+      "amount": 280,
+      "type": "gave"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ Marathi, get alerts, and send WhatsApp reminders.
 **Quick start, including opening it on your phone over Wi-Fi: [docs/demo.md](docs/demo.md)**
 · How it fits together: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 · 3-minute demo: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
+· Offline / on-device Gemma: [docs/OFFLINE.md](docs/OFFLINE.md)
 
 ## Prerequisites
 
@@ -154,6 +155,18 @@ Tests: `tests/test_phase5.py` (includes "correct an entry, re-upload a similar p
 - **Seed data:** `python -m scripts.seed_demo` (see [docs/demo.md](docs/demo.md#6-demo-data-optional)); refuses to
   wipe a database with customers unless `--yes`.
 - Tests: `tests/test_phase6.py`.
+
+### Offline path (Phase 7, stretch)
+
+Design for running a small Gemma on the phone with no internet, plus a benchmark that measures any provider on
+the same test set (`samples/khata`, the sample bill, `samples/voice.json`):
+
+```bash
+cd backend && python -m scripts.bench_offline                                      # cloud
+cd backend && python -m scripts.bench_offline --provider ollama --model gemma3:4b  # local
+```
+
+Results and the Android plan: [docs/OFFLINE.md](docs/OFFLINE.md).
 
 ## Switching the AI provider
 

@@ -160,6 +160,10 @@ function AuthCard({ view, onBack, onSwitch, onEnterDemo, onSignedIn }: { view: E
   const googleClientId = useGoogleClientId();
   // Google only accepts http://localhost or https origins, never a plain http://192.168… address
   const needsHttpsForGoogle = window.location.protocol === "http:" && !["localhost", "127.0.0.1"].includes(window.location.hostname);
+  // On a Wi-Fi IP like 192.168.1.5, the https version (npm run dev:https) lives at https://192-168-1-5.nip.io:5174
+  const httpsLink = /^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname)
+    ? `https://${window.location.hostname.replaceAll(".", "-")}.nip.io:5174`
+    : "";
 
   async function verifyGoogleCredential(credential: string) {
     setMessage("");
@@ -210,8 +214,19 @@ function AuthCard({ view, onBack, onSwitch, onEnterDemo, onSignedIn }: { view: E
             <GoogleButton clientId={googleClientId} onCredential={verifyGoogleCredential} onError={setMessage} />
             {needsHttpsForGoogle && (
               <p className="border border-info-line bg-info-soft px-3 py-2.5 text-sm leading-5 text-info-text">
-                Google sign-in only works on <b>localhost</b> or an <b>https</b> link. On this Wi-Fi address, use{" "}
-                <button type="button" onClick={onEnterDemo} className="font-semibold underline">Explore the demo</button> instead.
+                Google sign-in only works on <b>localhost</b> or an <b>https</b> link.{" "}
+                {httpsLink ? (
+                  <>
+                    Open{" "}
+                    <a href={httpsLink} className="break-all font-semibold underline">
+                      {httpsLink}
+                    </a>{" "}
+                    or{" "}
+                  </>
+                ) : (
+                  "On this address, "
+                )}
+                <button type="button" onClick={onEnterDemo} className="font-semibold underline">explore the demo</button>.
               </p>
             )}
             {verifyingGoogle && <p role="status" className="text-center text-sm text-muted">Signing you in…</p>}

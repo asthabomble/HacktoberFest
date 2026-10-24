@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {
+      "customer_name": "Deepak",
+      "amount": 150,
+      "type": "gave"
+    },
+    {
+      "customer_name": "Priya",
+      "amount": 400,
+      "type": "got"
+    },
+    {
+      "customer_name": "Rmsh",
+      "amount": 60,
+      "type": "gave"
+    },
+    {
+      "customer_name": "Sunita",
+      "amount": 1000,
+      "type": "got"
+    }
+  ]
+}

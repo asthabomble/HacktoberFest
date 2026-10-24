@@ -1,0 +1,8 @@
+[
+  {"text": "Ramesh ko 500 udhaar diya, Sunita ne 200 jama kiye",
+   "rows": [{"customer_name": "Ramesh", "amount": 500, "type": "gave"}, {"customer_name": "Sunita", "amount": 200, "type": "got"}]},
+  {"text": "पप्पू ढाबा वाले ने पाँच सौ रुपये जमा किए",
+   "rows": [{"customer_name": "पप्पू", "amount": 500, "type": "got"}]},
+  {"text": "Iqbal chacha le gaye dedh hazaar ka saaman",
+   "rows": [{"customer_name": "Iqbal chacha", "amount": 1500, "type": "gave"}]}
+]

@@ -108,7 +108,7 @@ Overdue = 30+ days. Home overview, alerts, customer pages and Pucho all use thes
 ## Known limits
 
 - Single shop, no login (the demo's `get_shop()` is the seam for multi-tenant auth).
-- Phone mic and live camera preview need https; over plain Wi-Fi the app falls back to the phone's
-  camera app and typed voice entry.
+- Phone mic, live camera preview and Google sign-in need https: use `npm run dev:https` and the nip.io
+  link (see demo.md). Over plain Wi-Fi the app falls back to the phone's camera app and typed voice entry.
 - Cross-script names ("रमेश" vs "Ramesh") rely on the model plus learned shorthand, not transliteration.
-- WhatsApp reminders use a fixed template; Phase 4 plans Gemma-drafted messages in the customer's language.
+- Offline: designed and benchmarked, not yet in an Android build. See [OFFLINE.md](OFFLINE.md).
