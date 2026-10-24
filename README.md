@@ -120,6 +120,26 @@ PYTHONPATH=. .venv/bin/pytest tests/ -v
 
 Tests verify all 10 Phase 2 requirements (mocked Gemma responses, retry logic, mismatch detection, editable values, fuzzy matching, stock additions, idempotency, transaction rollback, qualitative shelf status, and Phase 1 preservation).
 
+### Learns the shop's handwriting (Phase 5)
+
+1. **Correct once, remembered after.** On Review entries, change a name the AI read as written
+   (e.g. "Rmsh" → "Ramesh bhau") and confirm. The app stores `Rmsh = Ramesh bhau` in `ShorthandMap`.
+   The card shows "Save karne par yaad rakhenge: …" before you save. Linking a bill item to an existing
+   product does the same for items ("ch" = Sugar / Cheeni).
+2. **Used on the next photo.** The khata prompt includes the shop's customers and learned shorthand
+   (the bill prompt gets products and item shorthand). Code then resolves each name in this order:
+   learned shorthand → the model's pick from the customer list → fuzzy match. Auto-filled names
+   show why, e.g. "Rmsh → Ramesh bhau · seekha hua".
+3. **Fuzzy names** (`app/services/names.py`): ignores honorifics (bhau, tai, didi, ji, भाऊ, ताई…),
+   matches abbreviations by consonants ("Rmsh" ↔ "Ramesh"), and doesn't guess when two customers
+   match equally ("Ramesh Patil" vs "Ramesh Kumar").
+4. **Merge duplicates.** A customer's page lists likely duplicates with a **Jodo** button. Merging moves
+   the entries and remembers the old name as shorthand.
+
+API: `GET /api/customers/{id}/similar`, `POST /api/customers/{id}/merge` (`{"from_id": …}`);
+`POST /api/khata/confirm` accepts `written_name` per row and returns `learned`.
+Tests: `tests/test_phase5.py` (includes "correct an entry, re-upload a similar page, it's now right").
+
 ## Switching the AI provider
 
 All model calls go through `backend/app/services/gemma.py`. Set `AI_PROVIDER` in

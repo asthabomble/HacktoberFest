@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { Combine, MessageCircle, X } from "lucide-react";
 import { BottomBar, Card, Chip, OutlineButton, PrimaryButton, SubHeader, Tabs } from "../components/ui";
-import { apiGet, apiPost, imageUrl, type CreditType, type Ledger } from "../lib/api";
+import { apiGet, apiPost, imageUrl, type CreditType, type Ledger, type SimilarCustomer } from "../lib/api";
 import { formatDate, formatNumber, formatRupees, initials, today } from "../lib/format";
 
 type DetailTab = "entries" | "summary" | "reminders" | "photos";
@@ -90,13 +90,27 @@ export default function CustomerDetail({ id, onBack }: { id: number; onBack: () 
   const [error, setError] = useState("");
   const [tab, setTab] = useState<DetailTab>("entries");
   const [adding, setAdding] = useState(false);
+  const [similar, setSimilar] = useState<SimilarCustomer[]>([]);
 
   function load() {
     apiGet<Ledger>(`/api/customers/${id}/ledger`)
       .then(setData)
       .catch((e) => setError(e.message));
+    apiGet<{ customers: SimilarCustomer[] }>(`/api/customers/${id}/similar`)
+      .then((r) => setSimilar(r.customers))
+      .catch(() => setSimilar([]));
   }
   useEffect(load, [id]);
+
+  async function merge(other: SimilarCustomer) {
+    if (!data || !window.confirm(`"${other.name}" ki saari entries "${data.customer.name}" mein jod dein?`)) return;
+    try {
+      await apiPost(`/api/customers/${id}/merge`, { from_id: other.id });
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   const c = data?.customer;
   const photos = [...new Set((data?.entries ?? []).map((e) => e.source_image).filter((p): p is string => !!p))];
@@ -143,6 +157,23 @@ export default function CustomerDetail({ id, onBack }: { id: number; onBack: () 
           <div className="mx-auto max-w-md space-y-4 px-4 py-4 pb-28">
             {tab === "entries" && (
               <>
+                {similar.length > 0 && (
+                  <Card className="border-info-line bg-info-soft">
+                    <p className="flex items-center gap-2 px-4 pt-3 font-medium text-info-text">
+                      <Combine size={18} /> Ye same customer ho sakte hain
+                    </p>
+                    <p className="px-4 pb-2 text-sm text-muted">Jodne par entries ek khate mein aa jayengi aur naam yaad rahega.</p>
+                    {similar.map((s) => (
+                      <div key={s.id} className="flex items-center gap-3 border-t border-info-line px-4 py-2.5">
+                        <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                        <span className="font-mono text-sm text-muted">{formatRupees(s.balance)}</span>
+                        <button onClick={() => merge(s)} className="border-2 border-brand bg-white px-3 py-1 text-sm font-medium text-brand">
+                          Jodo
+                        </button>
+                      </div>
+                    ))}
+                  </Card>
+                )}
                 <Card className="flex items-end justify-between p-4">
                   <div>
                     <p className="text-sm text-muted">{c.balance >= 0 ? "Balance due" : "Advance"}</p>

@@ -1,7 +1,8 @@
 """Khata page photo -> udhaar rows.
 
 Gemma only reads the page. Cleanup (digits, dates, sanity checks that
-downgrade confidence) happens here in plain code.
+downgrade confidence) and name resolution (learned shorthand, fuzzy match
+against existing customers) happen here in plain code.
 """
 
 import re
@@ -11,6 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, field_validator
 
 from app.services import gemma
+from app.services.matching import normalize_text
+from app.services.names import best_match
 
 DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
 
@@ -21,6 +24,7 @@ def to_ascii_digits(text: str) -> str:
 
 class ExtractedRow(BaseModel):
     customer_name: str
+    written_name: str = ""  # the name exactly as written on the page, e.g. "Rmsh"
     amount: float
     type: Literal["gave", "got"]
     date: str | None = None  # YYYY-MM-DD
@@ -51,12 +55,21 @@ class KhataExtraction(BaseModel):
     rows: list[ExtractedRow]
 
 
+class ResolvedRow(ExtractedRow):
+    """What the confirm screen gets: customer_name may be replaced by a known customer."""
+
+    matched_by: Literal["shorthand", "customer", "fuzzy"] | None = None
+
+
 PROMPT = """You are reading a photo of a handwritten "khata" (credit ledger) page from a small Indian kirana shop.
 The writing may be Hindi, Marathi, English or mixed, in Devanagari or Latin script, with Devanagari (०-९) or Western digits.
 
 Extract every credit/payment line as a row:
-- customer_name: the person's name exactly as written (keep the original script, do not translate).
+- written_name: ONLY the person's name exactly as written, e.g. "Rmsh" or "सुनीता" (keep the original
+  script, do not translate). No items, no amounts, no words like jama/udhaar.
   If the page has one name as a heading and the lines below are that person's items, use that name for every row.
+- customer_name: if the written name (or its shorthand below) clearly refers to one of this shop's existing
+  customers, that customer's exact name from the list; otherwise the same as written_name.
 - amount: the rupee amount as a number (convert Devanagari digits to Western digits).
 - type:
     "gave" = shopkeeper gave goods/money on credit (udhaar, baaki, diya, नावे, उधार, बाकी, दिया, or an item purchase).
@@ -68,7 +81,9 @@ Extract every credit/payment line as a row:
 - confidence: "high" only if name, amount and type are all clearly legible; otherwise "low".
 
 Skip total/summary lines (कुल, टोटल, एकूण, total), headings with no amount, and lines that are crossed out.
-If the image is not a khata page or nothing is readable, return {{"rows": []}}."""
+If the image is not a khata page or nothing is readable, return {{"rows": []}}.
+
+{shop_context}"""
 
 
 def apply_sanity_checks(row: ExtractedRow) -> ExtractedRow:
@@ -81,6 +96,39 @@ def apply_sanity_checks(row: ExtractedRow) -> ExtractedRow:
     return row
 
 
-async def extract_rows(image: bytes) -> list[ExtractedRow]:
-    result = await gemma.generate_json(PROMPT.format(year=date.today().year), KhataExtraction, images=[image])
-    return [apply_sanity_checks(r) for r in result.rows]
+def clean_written_name(row: ExtractedRow) -> str:
+    """The model sometimes puts the whole line in written_name; fall back to the name if it isn't just a name."""
+    written = row.written_name.strip()
+    if not written or re.search(r"\d|[०-९]", written) or len(written.split()) > 4:
+        return row.customer_name.strip()
+    return written
+
+
+def resolve_name(row: ExtractedRow, customers: list[str], shorthand: dict[str, str]) -> ResolvedRow:
+    """Map the written name to a known customer: learned shorthand > model's pick from the list > fuzzy."""
+    written = clean_written_name(row)
+    resolved = ResolvedRow(**row.model_dump(), matched_by=None)
+    resolved.written_name = written
+    by_key = {normalize_text(c): c for c in customers}
+
+    if normalize_text(written) in shorthand:
+        resolved.customer_name, resolved.matched_by = shorthand[normalize_text(written)], "shorthand"
+    elif normalize_text(row.customer_name) in by_key:
+        resolved.customer_name = by_key[normalize_text(row.customer_name)]
+        resolved.matched_by = "customer" if normalize_text(row.customer_name) != normalize_text(written) else None
+    else:
+        match, _ = best_match(written, customers)
+        if match:
+            resolved.customer_name, resolved.matched_by = match, "fuzzy"
+    return resolved
+
+
+async def extract_rows(
+    image: bytes,
+    shop_context: str = "",
+    customers: list[str] | None = None,
+    shorthand: dict[str, str] | None = None,
+) -> list[ResolvedRow]:
+    prompt = PROMPT.format(year=date.today().year, shop_context=shop_context)
+    result = await gemma.generate_json(prompt, KhataExtraction, images=[image])
+    return [resolve_name(apply_sanity_checks(r), customers or [], shorthand or {}) for r in result.rows]

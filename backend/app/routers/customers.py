@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.db import get_session, get_shop
-from app.models import Customer, ShorthandMap
+from app.models import CreditEntry, Customer, ShorthandKind, ShorthandMap
+from app.services import shorthand
+from app.services.names import name_key, name_score
 from app.services.ledger import OVERDUE_DAYS, confirmed_entries, customer_summaries, overview, summarize, with_running_balance
 
 router = APIRouter(prefix="/api", tags=["customers"])
@@ -42,3 +45,55 @@ def customer_ledger(customer_id: int, session: Session = Depends(get_session)):
         "overdue_days": OVERDUE_DAYS,
         "entries": with_running_balance(entries),
     }
+
+
+SIMILAR_MIN_SCORE = 0.75
+
+
+def get_customer(session: Session, customer_id: int) -> Customer:
+    customer = session.get(Customer, customer_id)
+    if customer is None or customer.shop_id != get_shop(session).id:
+        raise HTTPException(404, "Customer not found")
+    return customer
+
+
+@router.get("/customers/{customer_id}/similar")
+def similar_customers(customer_id: int, session: Session = Depends(get_session)):
+    """Other customers that are probably the same person ("Ramesh" vs "Ramesh bhau" vs "Rmsh")."""
+    customer = get_customer(session, customer_id)
+    result = []
+    for c in customer_summaries(session, customer.shop_id):
+        if c["id"] == customer.id:
+            continue
+        score = name_score(customer.name, c["name"])
+        if score >= SIMILAR_MIN_SCORE:
+            result.append({**c, "score": score})
+    return {"customers": sorted(result, key=lambda c: c["score"], reverse=True)}
+
+
+class MergeRequest(BaseModel):
+    from_id: int  # this customer disappears; their entries move over
+
+
+@router.post("/customers/{customer_id}/merge")
+def merge_customers(customer_id: int, req: MergeRequest, session: Session = Depends(get_session)):
+    """Merge a duplicate into this customer and remember the old name as shorthand."""
+    target = get_customer(session, customer_id)
+    source = get_customer(session, req.from_id)
+    if source.id == target.id:
+        raise HTTPException(400, "Cannot merge a customer into itself")
+
+    entries = session.exec(select(CreditEntry).where(CreditEntry.customer_id == source.id)).all()
+    for e in entries:
+        e.customer_id = target.id
+        session.add(e)
+    shorthand.rename_meaning(session, target.shop_id, source.name, target.name)
+    if name_key(source.name) != name_key(target.name):  # "Iqbl" -> learn; "Ramesh" vs "Ramesh bhau" -> nothing new
+        shorthand.learn(session, target.shop_id, source.name, target.name, ShorthandKind.customer)
+    if not target.phone and source.phone:
+        target.phone = source.phone
+        session.add(target)
+    session.flush()
+    session.delete(source)
+    session.commit()
+    return {"merged": len(entries), "into": target.id}

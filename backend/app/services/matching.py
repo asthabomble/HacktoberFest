@@ -22,8 +22,9 @@ UNIT_PATTERNS = re.compile(
 def normalize_text(text: str) -> str:
     """Normalize item name: lowercased, Devanagari digits converted, punctuation stripped."""
     t = text.translate(DEVANAGARI_DIGITS).lower()
-    # Remove punctuation
-    t = re.sub(r"[^\w\s]", " ", t)
+    # Remove punctuation. Python's \w doesn't cover Devanagari vowel signs (matras), so keep the
+    # Devanagari block explicitly, except the danda punctuation । ॥ (U+0964, U+0965).
+    t = re.sub(r"[^\w\sऀ-ॣ०-ॿ]", " ", t)
     # Collapse multiple whitespaces
     return " ".join(t.split())
 

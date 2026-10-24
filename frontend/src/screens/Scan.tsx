@@ -23,7 +23,7 @@ import { formatDate, formatRupees, today } from "../lib/format";
 
 export type ScanMode = "khata" | "bill" | "shelf";
 
-type EditRow = KhataRow & { key: number };
+type EditRow = KhataRow & { key: number; suggestedName: string };
 type ProductChoice = number | "new";
 type EditBillItem = ExtractedBillItem & { key: number; selectedProductId: ProductChoice; customName: string };
 type EditShelfItem = ShelfItemWithMatch & { key: number; selectedProductId: ProductChoice; customName: string };
@@ -44,6 +44,7 @@ const MODE_COPY: Record<ScanMode, { hint: string; reading: string }> = {
 let nextKey = 1;
 const blankRow = (): EditRow => ({
   key: nextKey++,
+  suggestedName: "",
   customer_name: "",
   amount: 0,
   type: "gave",
@@ -236,7 +237,29 @@ function KhataCard({ row, onChange, onRemove }: { row: EditRow; onChange: (p: Pa
         />
         <DiyaJama value={row.type} onChange={(type) => onChange({ type })} />
       </div>
+      <NameHint row={row} />
     </li>
+  );
+}
+
+const MATCH_LABEL = { shorthand: "seekha hua", customer: "customer list se", fuzzy: "milta-julta naam" } as const;
+
+/** "Rmsh → Ramesh bhau · seekha hua", or after a correction: "Yaad rakhenge: Rmsh = Ramesh bhau" */
+function NameHint({ row }: { row: EditRow }) {
+  const written = row.written_name?.trim() ?? "";
+  const name = row.customer_name.trim();
+  if (!written || !name || written.toLowerCase() === name.toLowerCase()) return null;
+  if (row.matched_by && name === row.suggestedName) {
+    return (
+      <p className="mt-2 text-sm text-muted">
+        <span className="font-mono">{written}</span> → {name} · {MATCH_LABEL[row.matched_by]}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-2 text-sm text-brand">
+      Save karne par yaad rakhenge: <span className="font-mono">{written}</span> = {name}
+    </p>
   );
 }
 
@@ -415,7 +438,7 @@ export default function Scan({
     try {
       if (mode === "khata") {
         const res = await apiUpload<ExtractResponse>("/api/khata/extract", image, "khata.jpg");
-        const extracted = res.rows.map((r) => ({ ...r, date: r.date ?? today(), key: nextKey++ }));
+        const extracted = res.rows.map((r) => ({ ...r, date: r.date ?? today(), key: nextKey++, suggestedName: r.customer_name }));
         setRows(extracted.length ? extracted : [blankRow()]);
         setStage({ name: "review_khata", sourceImage: res.source_image });
       } else if (mode === "bill") {
@@ -462,11 +485,11 @@ export default function Scan({
     }
   }
 
-  async function save(request: () => Promise<unknown>, target: "ledger" | "stock", message: string) {
+  async function save<T>(request: () => Promise<T>, target: "ledger" | "stock", message: string | ((res: T) => string)) {
     setSaving(true);
     try {
-      await request();
-      onSaved(target, message);
+      const res = await request();
+      onSaved(target, typeof message === "string" ? message : message(res));
     } catch (e) {
       alert(`Save nahi hua: ${(e as Error).message}`);
       setSaving(false);
@@ -528,9 +551,16 @@ export default function Scan({
             className="flex-1"
             onClick={() =>
               save(
-                () => apiPost("/api/khata/confirm", { source_image: stage.sourceImage || null, rows: rows.map(({ key, ...r }) => r) }),
+                () =>
+                  apiPost<{ saved: number; learned: number }>("/api/khata/confirm", {
+                    source_image: stage.sourceImage || null,
+                    rows: rows.map(({ key, suggestedName, ...r }) => r),
+                  }),
                 "ledger",
-                "Entries khate mein save ho gayi",
+                (res) =>
+                  res.learned > 0
+                    ? `Entries save ho gayi · ${res.learned} naya shorthand seekha`
+                    : "Entries khate mein save ho gayi",
               )
             }
           >
@@ -633,6 +663,7 @@ export default function Scan({
                       rate: it.rate,
                       line_total: it.line_total,
                       raw_text: it.raw_text,
+                      item_name: it.item_name,
                       confidence: it.confidence,
                     })),
                   }),

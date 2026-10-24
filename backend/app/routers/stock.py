@@ -12,13 +12,15 @@ from app.models import (
     Confidence,
     Product,
     ShelfStatus,
+    ShorthandKind,
     StockEntry,
     StockEntryKind,
     SupplierBill,
 )
+from app.services import shorthand
 from app.services.bill import extract_bill
 from app.services.gemma import GemmaError
-from app.services.matching import match_product
+from app.services.matching import match_product, normalize_text
 from app.services.shelf import assess_shelf
 from app.services.stock import (
     get_product_stock_history,
@@ -71,6 +73,7 @@ class ConfirmBillItem(BaseModel):
     line_total: Optional[float] = None
     raw_text: str = ""
     confidence: Literal["high", "low"] = "high"
+    item_name: Optional[str] = None  # name as read from the bill; learned as shorthand if mapped to another product
 
 
 class ConfirmBillRequest(BaseModel):
@@ -133,19 +136,23 @@ async def extract_supplier_bill(
     filename = f"bill_{uuid.uuid4().hex[:12]}{EXTENSIONS[file.content_type]}"
     (UPLOAD_DIR / filename).write_bytes(image)
 
+    shop = get_shop(session)
     try:
-        processed = await extract_bill(image)
+        processed = await extract_bill(image, shorthand.bill_context(session, shop.id))
     except GemmaError as e:
         raise HTTPException(502, f"Could not read the supplier bill: {e}")
 
-    shop = get_shop(session)
     existing_products = session.exec(
         select(Product).where(Product.shop_id == shop.id)
     ).all()
+    learned = shorthand.lookup(session, shop.id, ShorthandKind.product)
+    products_by_name = {p.name: p for p in existing_products}
 
     items_with_matches = []
     for item in processed.items:
-        best_prod, score = match_product(item.item_name, existing_products)
+        # Learned shorthand ("ch" -> "Sugar / Cheeni") beats fuzzy matching
+        known = products_by_name.get(learned.get(normalize_text(item.item_name), ""))
+        best_prod, score = (known, 1.0) if known else match_product(item.item_name, existing_products)
         items_with_matches.append(
             ExtractedItemWithMatch(
                 item_name=item.item_name,
@@ -231,6 +238,9 @@ def confirm_supplier_bill(
                 session.flush()
             else:
                 raise HTTPException(400, "Item requires a valid product_id or new_product_name.")
+
+            if item.item_name:
+                shorthand.learn(session, shop.id, item.item_name, product.name, ShorthandKind.product)
 
             # Add confirmed stock purchase entry
             entry = StockEntry(

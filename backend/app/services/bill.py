@@ -214,7 +214,8 @@ def process_bill_extraction(extraction: BillExtraction) -> ProcessedBill:
     )
 
 
-async def extract_bill(image: bytes) -> ProcessedBill:
+async def extract_bill(image: bytes, shop_context: str = "") -> ProcessedBill:
     """Send bill image to Gemma service and apply Python calculation checks."""
-    result = await gemma.generate_json(PROMPT, BillExtraction, images=[image])
+    prompt = f"{PROMPT}\n\n{shop_context}" if shop_context else PROMPT
+    result = await gemma.generate_json(prompt, BillExtraction, images=[image])
     return process_bill_extraction(result)

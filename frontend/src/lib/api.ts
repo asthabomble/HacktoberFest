@@ -47,6 +47,8 @@ export type Confidence = "high" | "low";
 
 export type KhataRow = {
   customer_name: string;
+  written_name?: string; // name as written on the page, e.g. "Rmsh"
+  matched_by?: "shorthand" | "customer" | "fuzzy" | null;
   amount: number;
   type: CreditType;
   date: string | null;
@@ -92,6 +94,8 @@ export type LedgerEntry = {
   confidence: Confidence;
   running_balance: number;
 };
+
+export type SimilarCustomer = CustomerSummary & { score: number };
 
 export type Ledger = {
   customer: CustomerSummary;
