@@ -4,6 +4,7 @@ import Home from "./screens/Home";
 import Ledger from "./screens/Ledger";
 import Scan, { type ScanMode } from "./screens/Scan";
 import Stock from "./screens/Stock";
+import Poocho from "./screens/Poocho";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
@@ -36,6 +37,7 @@ export default function App() {
         />
       )}
       {tab === "ledger" && <Ledger />}
+      {tab === "poocho" && <Poocho />}
 
       {toast && (
         <div className="fixed inset-x-4 top-4 z-30 mx-auto max-w-md border-2 border-mint bg-ink px-4 py-3 font-pixel text-xs text-mint">

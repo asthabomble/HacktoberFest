@@ -197,3 +197,29 @@ export type ProductStockHistory = {
   };
   history: ProductStockHistoryEntry[];
 };
+
+export type ChatSample = {
+  category: string;
+  lang: string;
+  label: string;
+  query: string;
+  intent: string;
+};
+
+export type StructuredQueryTrace = {
+  intent: string;
+  threshold?: number | null;
+  time_period?: string | null;
+  customer_name?: string | null;
+  limit?: number | null;
+  language: string;
+  confidence: "high" | "low";
+};
+
+export type ChatResponse = {
+  query: string;
+  intent: string;
+  structured_query: StructuredQueryTrace;
+  data: Record<string, any>;
+  answer: string;
+};

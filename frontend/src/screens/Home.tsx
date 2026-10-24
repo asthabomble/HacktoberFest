@@ -25,7 +25,6 @@ function StatusRow({ label, ok, detail }: Check) {
 }
 
 const COMING = [
-  { title: "Poocho", hint: "हिंदी / मराठी में सवाल", phase: 3, accent: "border-sky" },
   { title: "Alerts", hint: "WhatsApp याद दिलाओ", phase: 4, accent: "border-rose" },
   { title: "Seekhta hai", hint: "आपकी लिखावट समझे", phase: 5, accent: "border-marigold" },
 ];
@@ -122,6 +121,16 @@ export default function Home({
             <span className="font-pixel text-sky text-sm mt-3">&gt; Check status</span>
           </button>
         </div>
+        <button
+          onClick={() => onNavigate("poocho")}
+          className="press flex w-full items-center justify-between border-2 border-sky bg-panel p-3 text-left hover:border-sky"
+        >
+          <span>
+            <span className="block font-pixel text-sm text-sky">Poocho AI</span>
+            <span className="block text-xs text-muted">हिंदी/मराठी में सवाल पूछें</span>
+          </span>
+          <span className="font-pixel text-sky">&gt;</span>
+        </button>
       </div>
 
       <section className="block-shadow border-2 border-line bg-panel p-4">

@@ -72,6 +72,12 @@ The home screen shows all three.
 API: `POST /api/khata/extract` (photo → rows, nothing saved), `POST /api/khata/confirm`,
 `GET /api/customers`, `GET /api/customers/{id}/ledger`.
 
+### Ask in Hindi/Marathi/Hinglish (Phase 3 – Poocho)
+
+Use the Poocho tab to ask natural language questions about customer balances, totals, and low stock. The backend validates a structured intent and runs only whitelisted Python queries against the database; model output is never executed as SQL.
+
+Run the sample suite with `cd backend` then `python -m scripts.test_poocho`.
+
 ### Supplier Bill + Shelf → Stock (Phase 2)
 
 1. **Scan** tab → select **Supplier Bill** mode:
