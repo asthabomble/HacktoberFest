@@ -17,6 +17,7 @@
   --color-mint: #7cf2c0; /* ok / money in */
   --color-rose: #ff6fa8; /* alert / money out */
   --color-sky: #8ab4ff;
+  --color-warn: #ffe066; /* low-confidence rows */
 
   --font-sans: "Hind", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -52,5 +53,14 @@
   &:active {
     transform: translate(3px, 3px);
     box-shadow: 1px 1px 0 0 var(--color-line);
+  }
+}
+
+@keyframes scan {
+  from {
+    top: 0;
+  }
+  to {
+    top: calc(100% - 4px);
   }
 }

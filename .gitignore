@@ -12,3 +12,6 @@ frontend/dist/
 frontend/.env
 
 .DS_Store
+
+# TypeScript build cache
+*.tsbuildinfo

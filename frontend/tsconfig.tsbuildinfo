@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/lib/api.ts"],"version":"5.7.2"}
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/Nav.tsx","./src/lib/api.ts","./src/lib/format.ts","./src/lib/image.ts","./src/screens/Home.tsx","./src/screens/Ledger.tsx","./src/screens/Scan.tsx"],"version":"5.7.2"}

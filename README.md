@@ -55,6 +55,38 @@ so the app works on a phone on the same Wi-Fi too (`npm run dev -- --host`).
 
 The home screen shows all three.
 
+## Features
+
+### Snap khata → udhaar entries (Phase 1)
+
+1. **Scan** tab → take a photo of a khata page (or pick from gallery).
+   The photo is shrunk to 1600px on the phone before upload.
+2. Gemma reads each line: customer name, amount, gave/got, date, raw text, confidence.
+   Devanagari digits and "₹1,200/-" style amounts are cleaned up in code, and rows
+   with a missing name, zero/huge amount or paise are forced to low confidence.
+3. **Confirm screen**: every row is editable; low-confidence rows are yellow.
+   Untick rows you don't want. Only rows you confirm are saved.
+4. **Khata** tab: customers with balance (gave − got), tap one for the ledger with
+   running balance and a link to the source photo.
+
+API: `POST /api/khata/extract` (photo → rows, nothing saved), `POST /api/khata/confirm`,
+`GET /api/customers`, `GET /api/customers/{id}/ledger`.
+
+#### Measuring accuracy on real photos
+
+Put photos in a folder with a same-named answer file per photo:
+
+```
+samples/page1.jpg
+samples/page1.json   {"rows": [{"customer_name": "Ramesh", "amount": 500, "type": "gave"}]}
+```
+
+```bash
+cd backend && python -m scripts.eval_khata samples/
+```
+
+It prints correct/expected per photo plus overall recall and precision.
+
 ## Switching the AI provider
 
 All model calls go through `backend/app/services/gemma.py`. Set `AI_PROVIDER` in

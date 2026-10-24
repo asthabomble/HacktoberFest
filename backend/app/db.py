@@ -31,6 +31,11 @@ def get_session() -> Iterator[Session]:
         yield session
 
 
+def get_shop(session: Session) -> Shop:
+    """The demo runs as a single shop. Swap for auth-based lookup later."""
+    return session.exec(select(Shop)).first()
+
+
 def db_ok() -> bool:
     try:
         with Session(engine) as session:
