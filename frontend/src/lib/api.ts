@@ -79,6 +79,7 @@ export type LowStockAlert = {
   current_stock: number;
   threshold: number;
   shortage: number;
+  shelf_low?: boolean; // low because the latest shelf photo said so
   message: string;
 };
 

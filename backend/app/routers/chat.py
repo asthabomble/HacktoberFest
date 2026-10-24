@@ -7,6 +7,7 @@ from sqlmodel import Session
 
 from app.db import get_session, get_shop
 from app.services.chat import process_chat_query
+from app.services.ledger import customer_summaries
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -108,7 +109,26 @@ async def ask_question(req: ChatRequest, session: Session = Depends(get_session)
     return result
 
 
+# Customer-balance questions are filled with this shop's real customers instead of fixed names
+BALANCE_TEMPLATES = {
+    "hi": ("ग्राहक खाता", "{name} का कितना बाकी है?"),
+    "mr": ("मराठी ग्राहक", "{name} यांचा किती बाकी आहे?"),
+}
+
+
 @router.get("/samples")
-def get_sample_questions():
-    """Returns curated questions in Hindi, Marathi, and Hinglish for the UI chips."""
-    return {"samples": SAMPLE_QUESTIONS}
+def get_sample_questions(session: Session = Depends(get_session)):
+    """Curated questions in Hindi, Marathi and Hinglish for the UI chips, using real customer names."""
+    debtors = [c["name"] for c in customer_summaries(session, get_shop(session).id) if c["balance"] > 0]
+    samples = []
+    for sample in SAMPLE_QUESTIONS:
+        if sample["intent"] != "customer_balance":
+            samples.append(sample)
+            continue
+        if not debtors:
+            continue  # no customers yet: skip questions about a specific person
+        name = debtors.pop(0)
+        category, template = BALANCE_TEMPLATES.get(sample["lang"], BALANCE_TEMPLATES["hi"])
+        question = template.format(name=name)
+        samples.append({**sample, "category": category, "label": question, "query": question})
+    return {"samples": samples}

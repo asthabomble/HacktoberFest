@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, ImageIcon, Receipt, ScanLine } from "lucide-react";
-import { Card, Chip, OutlineButton, PrimaryButton, SubHeader } from "../components/ui";
+import { Card, Chip, OutlineButton, PrimaryButton, Skeleton, SkeletonRows, SubHeader } from "../components/ui";
 import { apiGet, imageUrl, type ProductStockHistory, type ProductStockItem, type ShelfStatus } from "../lib/api";
 import { formatDate, formatRupees } from "../lib/format";
+import { useLang, type TKey } from "../lib/i18n";
 
-const SHELF_LABEL: Record<ShelfStatus, string> = { low: "Low", medium: "Medium", full: "Full" };
+const SHELF_LABEL: Record<ShelfStatus, TKey> = { low: "Low", medium: "Medium", full: "Full" };
 
 export function ShelfChip({ status }: { status: ShelfStatus | null }) {
+  const { t } = useLang();
   if (!status) return null;
   const tone = status === "low" ? "red" : status === "medium" ? "yellow" : "gray";
-  return <Chip tone={tone}>Shelf: {SHELF_LABEL[status]}</Chip>;
+  return <Chip tone={tone}>{t("Shelf:")} {t(SHELF_LABEL[status])}</Chip>;
 }
 
 /** Stock tab on Home: products with counted stock (from bills) and latest shelf status. */
@@ -22,6 +24,7 @@ export function StockList({
   onScanBill: () => void;
   onScanShelf: () => void;
 }) {
+  const { t } = useLang();
   const [products, setProducts] = useState<ProductStockItem[] | null>(null);
   const [error, setError] = useState("");
 
@@ -39,22 +42,24 @@ export function StockList({
 
       <Card className="grid grid-cols-2">
         <div className="border-r border-line p-4">
-          <p className="text-sm text-muted">Products</p>
-          <p className="mt-1 font-mono text-2xl font-semibold">{products?.length ?? 0}</p>
+          <p className="text-sm text-muted">{t("Products")}</p>
+          <p className="mt-1 font-mono text-2xl font-semibold">{products ? products.length : <Skeleton className="h-7 w-12" />}</p>
         </div>
         <div className="p-4">
-          <p className="text-sm text-muted">Low stock items</p>
-          <p className="mt-1 font-mono text-2xl font-semibold text-brand">{lowCount}</p>
+          <p className="text-sm text-muted">{t("Low stock items")}</p>
+          <p className="mt-1 font-mono text-2xl font-semibold text-brand">{products ? lowCount : <Skeleton className="h-7 w-12" />}</p>
         </div>
       </Card>
 
       <Card>
-        {products && products.length > 0 ? (
+        {!products && !error ? (
+          <SkeletonRows rows={5} />
+        ) : products && products.length > 0 ? (
           <table className="w-full table-fixed text-left">
             <thead>
               <tr className="border-b border-line bg-soft text-xs font-medium uppercase tracking-wider text-muted">
-                <th className="py-2.5 pl-4 font-medium">Product</th>
-                <th className="w-24 py-2.5 text-right font-medium">Stock</th>
+                <th className="py-2.5 pl-4 font-medium">{t("Product")}</th>
+                <th className="w-24 py-2.5 text-right font-medium">{t("Stock")}</th>
                 <th className="w-10" />
               </tr>
             </thead>
@@ -65,7 +70,7 @@ export function StockList({
                     <p className="truncate text-[15px]">{p.name}</p>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       <ShelfChip status={p.shelf_status} />
-                      {p.is_low && !p.shelf_status && <Chip tone="red">Low</Chip>}
+                      {p.is_low && !p.shelf_status && <Chip tone="red">{t("Low")}</Chip>}
                     </div>
                   </td>
                   <td className={`py-3 text-right align-top font-mono text-[15px] ${p.is_low ? "text-danger" : ""}`}>
@@ -80,17 +85,17 @@ export function StockList({
           </table>
         ) : (
           <p className="px-4 py-8 text-center text-muted">
-            Abhi koi stock record nahi. Supplier bill scan karein ya shelf ki photo lein.
+            {t("Abhi koi stock record nahi. Supplier bill scan karein ya shelf ki photo lein.")}
           </p>
         )}
       </Card>
 
       <div className="flex gap-3">
         <OutlineButton icon={ScanLine} onClick={onScanShelf} className="w-36 shrink-0">
-          Shelf
+          {t("Shelf")}
         </OutlineButton>
         <PrimaryButton icon={Receipt} onClick={onScanBill} className="flex-1">
-          Scan supplier bill
+          {t("Scan supplier bill")}
         </PrimaryButton>
       </div>
     </>
@@ -99,6 +104,7 @@ export function StockList({
 
 /** Product screen: stock history from bills and shelf checks. */
 export default function ProductDetail({ id, onBack }: { id: number; onBack: () => void }) {
+  const { t } = useLang();
   const [data, setData] = useState<ProductStockHistory | null>(null);
   const [error, setError] = useState("");
 
@@ -114,8 +120,16 @@ export default function ProductDetail({ id, onBack }: { id: number; onBack: () =
 
   return (
     <>
-      <SubHeader title="Product" onBack={onBack} />
+      <SubHeader title={t("Product")} onBack={onBack} />
       {error && <p className="p-4 text-sm text-danger">{error}</p>}
+      {!data && !error && (
+        <div className="mx-auto max-w-md space-y-4 px-4 py-4" aria-busy="true">
+          <Skeleton className="h-6 w-48" />
+          <Card>
+            <SkeletonRows rows={4} />
+          </Card>
+        </div>
+      )}
 
       {data && (
         <>
@@ -123,7 +137,7 @@ export default function ProductDetail({ id, onBack }: { id: number; onBack: () =
             <div className="mx-auto max-w-md px-4 py-4">
               <h2 className="text-xl font-semibold">{data.product.name}</h2>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-                <span>Unit: {data.product.unit}</span>
+                <span>{t("Unit:")} {data.product.unit}</span>
                 <ShelfChip status={lastShelf?.shelf_status ?? null} />
               </div>
             </div>
@@ -132,13 +146,13 @@ export default function ProductDetail({ id, onBack }: { id: number; onBack: () =
           <div className="mx-auto max-w-md space-y-4 px-4 py-4">
             <Card className="flex items-end justify-between p-4">
               <div>
-                <p className="text-sm text-muted">Current stock</p>
+                <p className="text-sm text-muted">{t("Current stock")}</p>
                 <p className="font-mono text-[30px] font-semibold leading-tight">
                   {current} <span className="text-base text-muted">{data.product.unit}</span>
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-muted">Last purchase</p>
+                <p className="text-sm text-muted">{t("Last purchase")}</p>
                 <p className="text-sm font-medium">
                   {lastPurchase
                     ? `+${lastPurchase.qty_change}${lastPurchase.rate ? ` @ ${formatRupees(lastPurchase.rate)}` : ""} · ${formatDate(lastPurchase.created_at)}`
@@ -151,9 +165,9 @@ export default function ProductDetail({ id, onBack }: { id: number; onBack: () =
               <table className="w-full table-fixed text-left">
                 <thead>
                   <tr className="border-b border-line bg-soft text-xs font-medium uppercase tracking-wider text-muted">
-                    <th className="w-[4.5rem] py-2.5 pl-4 font-medium">Date</th>
-                    <th className="py-2.5 font-medium">Event</th>
-                    <th className="w-24 py-2.5 pr-4 text-right font-medium">Qty</th>
+                    <th className="w-[5.25rem] py-2.5 pl-4 font-medium">{t("Date")}</th>
+                    <th className="py-2.5 font-medium">{t("Event")}</th>
+                    <th className="w-24 py-2.5 pr-4 text-right font-medium">{t("Qty")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -162,7 +176,7 @@ export default function ProductDetail({ id, onBack }: { id: number; onBack: () =
                       <td className="py-3 pl-4 align-top text-muted">{formatDate(e.created_at)}</td>
                       <td className="break-words py-3 pr-2 align-top">
                         <p>
-                          {e.kind === "purchase" ? "Supplier bill" : e.kind === "shelf_check" ? "Shelf check" : e.kind}
+                          {e.kind === "purchase" ? t("Supplier bill") : e.kind === "shelf_check" ? t("Shelf check") : e.kind}
                           {e.source_image && (
                             <a
                               href={imageUrl(e.source_image)}
@@ -170,12 +184,12 @@ export default function ProductDetail({ id, onBack }: { id: number; onBack: () =
                               rel="noreferrer"
                               className="ml-2 inline-flex items-center gap-0.5 text-sm text-brand"
                             >
-                              <ImageIcon size={14} /> Photo
+                              <ImageIcon size={14} /> {t("Photo")}
                             </a>
                           )}
                         </p>
                         {e.raw_text && <p className="font-mono text-xs text-muted">{e.raw_text}</p>}
-                        {e.rate != null && <p className="text-xs text-muted">Rate {formatRupees(e.rate)}</p>}
+                        {e.rate != null && <p className="text-xs text-muted">{t("Rate")} {formatRupees(e.rate)}</p>}
                       </td>
                       <td className="py-3 pr-4 text-right align-top font-mono">
                         {e.kind === "shelf_check" ? (
@@ -188,7 +202,7 @@ export default function ProductDetail({ id, onBack }: { id: number; onBack: () =
                   ))}
                 </tbody>
               </table>
-              {data.history.length === 0 && <p className="py-8 text-center text-muted">Koi stock history nahi.</p>}
+              {data.history.length === 0 && <p className="py-8 text-center text-muted">{t("Koi stock history nahi.")}</p>}
             </Card>
           </div>
         </>

@@ -3,6 +3,7 @@ import { Copy, MessageCircle, RefreshCw, X } from "lucide-react";
 import { Chip, PrimaryButton } from "./ui";
 import { apiPost, type DraftReminderResponse } from "../lib/api";
 import { formatRupees } from "../lib/format";
+import { useLang } from "../lib/i18n";
 
 export default function ReminderSheet({
   customerId,
@@ -19,6 +20,7 @@ export default function ReminderSheet({
   initialLanguage?: string;
   onClose: () => void;
 }) {
+  const { t } = useLang();
   const [lang, setLang] = useState<string>(initialLanguage || "hi");
   const [loading, setLoading] = useState<boolean>(true);
   const [draft, setDraft] = useState<DraftReminderResponse | null>(null);
@@ -70,9 +72,9 @@ export default function ReminderSheet({
         <div className="flex items-center justify-between bg-bar px-4 py-3 text-logo">
           <div className="flex items-center gap-2">
             <MessageCircle size={20} />
-            <h2 className="text-lg font-semibold">Payment reminder</h2>
+            <h2 className="text-lg font-semibold">{t("Payment reminder")}</h2>
           </div>
-          <button onClick={onClose} aria-label="Close" className="text-logo">
+          <button onClick={onClose} aria-label={t("Close")} className="text-logo">
             <X size={22} />
           </button>
         </div>
@@ -82,15 +84,15 @@ export default function ReminderSheet({
           <div className="flex items-start justify-between">
             <div>
               <p className="font-semibold text-ink text-base">{customerName}</p>
-              <p className="font-mono text-sm text-brand font-medium">Due: {formatRupees(balance)}</p>
+              <p className="font-mono text-sm text-brand font-medium">{t("Due:")} {formatRupees(balance)}</p>
             </div>
-            <Chip tone="gray">Draft · Not sent</Chip>
+            <Chip tone="gray">{t("Draft · Not sent")}</Chip>
           </div>
 
           {/* Language selector */}
           <div>
             <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
-              Message language
+              {t("Message language")}
             </label>
             <div className="flex gap-2">
               {[
@@ -118,7 +120,7 @@ export default function ReminderSheet({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-medium text-muted uppercase tracking-wider">
-                Reminder draft (editable)
+                {t("Reminder draft (editable)")}
               </label>
               <button
                 type="button"
@@ -127,14 +129,14 @@ export default function ReminderSheet({
                 className="flex items-center gap-1 text-xs text-brand hover:underline disabled:opacity-50"
               >
                 <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-                Regenerate
+                {t("Regenerate")}
               </button>
             </div>
             <textarea
               rows={4}
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Reminder message…"
+              placeholder={t("Reminder message…")}
               className="w-full border-2 border-line bg-white p-3 text-sm text-ink outline-none focus:border-brand"
             />
           </div>
@@ -142,24 +144,24 @@ export default function ReminderSheet({
           {/* Phone status & validation */}
           {draft && !draft.is_phone_valid && (
             <div className="border border-danger/40 bg-danger-soft p-3 text-xs text-danger rounded-sm">
-              <p className="font-semibold">⚠ Phone number invalid or missing</p>
+              <p className="font-semibold">⚠ {t("Phone number invalid or missing")}</p>
               <p className="mt-0.5 text-muted">
-                {phone ? `Stored number "${phone}" is not a valid 10-digit Indian mobile.` : "No phone number saved for this customer."}
-                {" "}You can still open WhatsApp or copy the message manually.
+                {phone ? t('Stored number "{phone}" is not a valid 10-digit Indian mobile.', { phone }) : t("No phone number saved for this customer.")}{" "}
+                {t("You can still open WhatsApp or copy the message manually.")}
               </p>
             </div>
           )}
 
           {draft?.is_phone_valid && (
             <p className="text-xs text-muted">
-              Sending to: <span className="font-mono font-medium text-ink">+{draft.normalized_phone}</span>
+              {t("Sending to:")} <span className="font-mono font-medium text-ink">+{draft.normalized_phone}</span>
             </p>
           )}
 
           {error && <p className="text-xs text-danger">{error}</p>}
 
           <p className="text-xs text-muted">
-            WhatsApp prefilled message ke saath khulega. Bhejne ke liye WhatsApp par send dabayein.
+            {t("WhatsApp prefilled message ke saath khulega. Bhejne ke liye WhatsApp par send dabayein.")}
           </p>
 
           {/* Actions */}
@@ -170,7 +172,7 @@ export default function ReminderSheet({
               className="flex items-center justify-center gap-1.5 border border-line bg-white px-3 py-2.5 text-sm font-medium text-muted hover:text-ink active:bg-soft"
             >
               <Copy size={16} />
-              {copied ? "Copied!" : "Copy"}
+              {copied ? t("Copied!") : t("Copy")}
             </button>
             <PrimaryButton
               icon={MessageCircle}
@@ -178,7 +180,7 @@ export default function ReminderSheet({
               disabled={loading || !messageText.trim()}
               className="flex-1"
             >
-              Open in WhatsApp
+              {t("Open in WhatsApp")}
             </PrimaryButton>
           </div>
         </div>

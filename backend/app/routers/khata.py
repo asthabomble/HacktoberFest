@@ -11,7 +11,7 @@ from app.db import get_session, get_shop
 from app.models import Confidence, CreditEntry, CreditType, Customer, ShorthandKind
 from app.services import shorthand
 from app.services.gemma import GemmaError
-from app.services.khata import ResolvedRow, extract_rows
+from app.services.khata import ResolvedRow, extract_from_text, extract_rows
 from app.services.matching import normalize_text
 from app.services.names import name_key
 
@@ -66,6 +66,27 @@ async def extract(file: UploadFile, session: Session = Depends(get_session)):
     except GemmaError as e:
         raise HTTPException(502, f"Could not read the photo: {e}")
     return ExtractResponse(source_image=f"/uploads/{filename}", rows=rows)
+
+
+class VoiceRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+
+
+@router.post("/voice", response_model=ExtractResponse)
+async def voice(req: VoiceRequest, session: Session = Depends(get_session)):
+    """Spoken/typed entries -> rows for the same Review screen. Nothing is saved here."""
+    shop = get_shop(session)
+    customers = session.exec(select(Customer.name).where(Customer.shop_id == shop.id)).all()
+    try:
+        rows = await extract_from_text(
+            req.text,
+            shop_context=shorthand.khata_context(session, shop.id),
+            customers=list(customers),
+            shorthand=shorthand.lookup(session, shop.id, ShorthandKind.customer),
+        )
+    except GemmaError as e:
+        raise HTTPException(502, f"Could not understand the entry: {e}")
+    return ExtractResponse(source_image="", rows=rows)
 
 
 class ConfirmRow(BaseModel):

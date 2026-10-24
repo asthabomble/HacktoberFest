@@ -15,6 +15,12 @@ class GoogleCredential(BaseModel):
     credential: str = Field(min_length=1)
 
 
+@router.get("/config")
+def auth_config() -> dict[str, str]:
+    """Public settings the sign-in page needs. The OAuth client ID is public; the secret never leaves the server."""
+    return {"google_client_id": get_settings().google_oauth_client_id.strip()}
+
+
 @router.post("/google")
 def google_sign_in(payload: GoogleCredential) -> dict[str, Any]:
     """Verify a Google Identity Services ID token and return its basic profile."""

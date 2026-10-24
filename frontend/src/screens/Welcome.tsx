@@ -11,12 +11,11 @@ import {
   EyeOff,
   ShieldCheck,
   Sparkles,
-  Wallet,
 } from "lucide-react";
-import { apiPost } from "../lib/api";
+import { apiGet, apiPost } from "../lib/api";
 
 type AuthView = "landing" | "login" | "signup";
-type GoogleProfile = { subject: string; email: string; name: string; picture: string | null };
+export type GoogleProfile = { subject: string; email: string; name: string; picture: string | null };
 
 declare global {
   interface Window {
@@ -61,14 +60,15 @@ function Brand({ light = false }: { light?: boolean }) {
   );
 }
 
-function GoogleButton({ clientId, onCredential, onError }: { clientId: string; onCredential: (credential: string) => void; onError: (message: string) => void }) {
+function GoogleButton({ clientId, onCredential, onError }: { clientId: string | null; onCredential: (credential: string) => void; onError: (message: string) => void }) {
   const container = useRef<HTMLDivElement>(null);
   const credentialHandler = useRef(onCredential);
   credentialHandler.current = onCredential;
 
   useEffect(() => {
+    if (clientId === null) return; // still asking the backend
     if (!clientId) {
-      onError("Google sign-in needs VITE_GOOGLE_CLIENT_ID in frontend/.env. Add your Web OAuth client ID, then restart Vite.");
+      onError("Google sign-in isn't set up yet: add GOOGLE_OAUTH_CLIENT_ID to backend/.env and restart the backend.");
       return;
     }
 
@@ -98,6 +98,19 @@ function GoogleButton({ clientId, onCredential, onError }: { clientId: string; o
   }, [clientId, onError]);
 
   return <div ref={container} className="flex h-12 w-full items-center justify-center" aria-label="Continue with Google" />;
+}
+
+/** Client ID from VITE_GOOGLE_CLIENT_ID, else from the backend's GOOGLE_OAUTH_CLIENT_ID. null while loading. */
+function useGoogleClientId(): string | null {
+  const fromEnv = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
+  const [clientId, setClientId] = useState<string | null>(fromEnv || null);
+  useEffect(() => {
+    if (fromEnv) return;
+    apiGet<{ google_client_id: string }>("/api/auth/config")
+      .then((c) => setClientId(c.google_client_id))
+      .catch(() => setClientId(""));
+  }, [fromEnv]);
+  return clientId;
 }
 
 function Field({
@@ -140,19 +153,20 @@ function Field({
   );
 }
 
-function AuthCard({ view, onBack, onSwitch, onEnterDemo }: { view: Exclude<AuthView, "landing">; onBack: () => void; onSwitch: (view: AuthView) => void; onEnterDemo: () => void }) {
+function AuthCard({ view, onBack, onSwitch, onEnterDemo, onSignedIn }: { view: Exclude<AuthView, "landing">; onBack: () => void; onSwitch: (view: AuthView) => void; onEnterDemo: () => void; onSignedIn: (profile: GoogleProfile) => void }) {
   const [message, setMessage] = useState("");
-  const [googleProfile, setGoogleProfile] = useState<GoogleProfile | null>(null);
   const [verifyingGoogle, setVerifyingGoogle] = useState(false);
   const signup = view === "signup";
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
+  const googleClientId = useGoogleClientId();
+  // Google only accepts http://localhost or https origins, never a plain http://192.168… address
+  const needsHttpsForGoogle = window.location.protocol === "http:" && !["localhost", "127.0.0.1"].includes(window.location.hostname);
 
   async function verifyGoogleCredential(credential: string) {
     setMessage("");
     setVerifyingGoogle(true);
     try {
       const profile = await apiPost<GoogleProfile>("/api/auth/google", { credential });
-      setGoogleProfile(profile);
+      onSignedIn(profile); // straight into the app
     } catch (error) {
       setMessage((error as Error).message || "Google sign-in could not be verified. Please try again.");
     } finally {
@@ -166,7 +180,7 @@ function AuthCard({ view, onBack, onSwitch, onEnterDemo }: { view: Exclude<AuthV
   return (
     <div className="flex min-h-dvh flex-col bg-page">
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between gap-2 px-4 py-4 sm:px-8 sm:py-5">
-        <button type="button" onClick={onBack} aria-label="Back to home"><Brand /></button>
+        <button type="button" onClick={onBack} aria-label="Back to home" className="flex min-h-11 items-center"><Brand /></button>
         <button type="button" onClick={onBack} className="flex h-11 shrink-0 items-center gap-0.5 text-xs font-medium text-muted hover:text-brand sm:gap-1 sm:text-sm">
           <ChevronLeft size={17} /> <span className="sm:hidden">Home</span><span className="hidden sm:inline">Back to home</span>
         </button>
@@ -194,13 +208,13 @@ function AuthCard({ view, onBack, onSwitch, onEnterDemo }: { view: Exclude<AuthV
 
           <div className="mt-7 space-y-3">
             <GoogleButton clientId={googleClientId} onCredential={verifyGoogleCredential} onError={setMessage} />
-            {verifyingGoogle && <p role="status" className="text-center text-sm text-muted">Verifying your Google account…</p>}
-            {googleProfile && (
-              <div className="border border-info-line bg-info-soft p-3 text-sm text-info-text">
-                Signed in as <strong>{googleProfile.name}</strong> ({googleProfile.email}).
-                <button type="button" onClick={onEnterDemo} className="mt-2 flex h-10 w-full items-center justify-center gap-2 bg-bar font-semibold text-logo">Continue to HisaabKitaab<ArrowRight size={17} /></button>
-              </div>
+            {needsHttpsForGoogle && (
+              <p className="border border-info-line bg-info-soft px-3 py-2.5 text-sm leading-5 text-info-text">
+                Google sign-in only works on <b>localhost</b> or an <b>https</b> link. On this Wi-Fi address, use{" "}
+                <button type="button" onClick={onEnterDemo} className="font-semibold underline">Explore the demo</button> instead.
+              </p>
             )}
+            {verifyingGoogle && <p role="status" className="text-center text-sm text-muted">Signing you in…</p>}
             <div className="flex items-center gap-3 py-1"><span className="h-px flex-1 bg-line" /><span className="text-xs font-medium uppercase tracking-wider text-muted">or continue with email</span><span className="h-px flex-1 bg-line" /></div>
           </div>
 
@@ -209,7 +223,7 @@ function AuthCard({ view, onBack, onSwitch, onEnterDemo }: { view: Exclude<AuthV
             <Field label="Email address" type="email" placeholder="you@yourshop.com" autoComplete="email" />
             <div>
               <Field label="Password" type="password" placeholder="At least 8 characters" autoComplete={signup ? "new-password" : "current-password"} />
-              {!signup && <button type="button" onClick={() => setMessage("Password reset will be available when account access is connected.")} className="mt-2 text-sm font-medium text-brand hover:underline">Forgot password?</button>}
+              {!signup && <button type="button" onClick={() => setMessage("Password reset will be available when account access is connected.")} className="mt-1 inline-flex min-h-11 items-center text-sm font-medium text-brand hover:underline">Forgot password?</button>}
             </div>
             {signup && <label className="flex items-start gap-2.5 text-sm leading-5 text-muted"><input required type="checkbox" className="mt-1 accent-brand" /><span>I agree to the <a href="#terms" onClick={(e) => e.preventDefault()} className="font-medium text-brand hover:underline">Terms</a> and <a href="#privacy" onClick={(e) => e.preventDefault()} className="font-medium text-brand hover:underline">Privacy Policy</a>.</span></label>}
             <button className="flex h-12 w-full items-center justify-center gap-2 bg-bar text-[15px] font-semibold text-logo transition hover:bg-bar-strong" type="submit">{signup ? "Create account" : "Sign in"}<ArrowRight size={18} /></button>
@@ -217,7 +231,7 @@ function AuthCard({ view, onBack, onSwitch, onEnterDemo }: { view: Exclude<AuthV
           {message && <p role="status" className="mt-4 border border-info-line bg-info-soft px-3 py-2.5 text-sm leading-5 text-info-text">{message}</p>}
           <p className="mt-6 text-center text-sm text-muted">
             {signup ? "Already have an account?" : "New to HisaabKitaab?"}{" "}
-            <button type="button" onClick={() => onSwitch(signup ? "login" : "signup")} className="font-semibold text-brand hover:underline">{signup ? "Sign in" : "Create an account"}</button>
+            <button type="button" onClick={() => onSwitch(signup ? "login" : "signup")} className="inline-flex min-h-11 items-center font-semibold text-brand hover:underline">{signup ? "Sign in" : "Create an account"}</button>
           </p>
         </section>
       </main>
@@ -226,29 +240,30 @@ function AuthCard({ view, onBack, onSwitch, onEnterDemo }: { view: Exclude<AuthV
   );
 }
 
-function ShopPreview() {
+/** "How it works" panel for the landing page. No numbers or names: real shop data only shows after login. */
+function HowItWorks() {
+  const steps: { icon: typeof Camera; title: string; text: string }[] = [
+    { icon: Camera, title: "Photo of your khata page", text: "Handwritten in Hindi, Marathi or English, even your own shorthand." },
+    { icon: ShieldCheck, title: "Check, then save", text: "Every line is editable; unclear ones are highlighted. Nothing saves until you confirm." },
+    { icon: Sparkles, title: "Ask in your language", text: "“Aaj ka total udhaar kitna hai?” Answers come from your own records." },
+  ];
   return (
     <div className="relative mx-auto w-full min-w-0 max-w-[510px] px-1 sm:px-0">
       <div className="absolute -inset-5 rounded-[2rem] bg-bar/20 blur-2xl" />
-      <div className="relative border border-line bg-white p-3.5 shadow-[0_20px_55px_rgba(58,42,6,0.12)] sm:rotate-[1deg] sm:p-5 sm:shadow-[0_28px_70px_rgba(58,42,6,0.14)]">
-        <div className="flex items-center justify-between border-b border-line pb-4">
-          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-info-soft text-brand sm:size-10"><Wallet size={20} /></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink sm:text-base">Sharma General Store</p><p className="text-xs text-muted">Today’s overview</p></div></div>
-          <span className="hidden shrink-0 rounded-full bg-[#edf7ef] px-2.5 py-1 text-xs font-medium text-[#2e6a3d] sm:inline-flex">All caught up</span>
-          <span aria-label="All caught up" className="ml-2 size-2 shrink-0 rounded-full bg-[#5b9b65] sm:hidden" />
-        </div>
-        <div className="grid grid-cols-2 gap-2 py-3 sm:gap-3 sm:py-4">
-          <div className="min-w-0 border border-line bg-page p-2.5 sm:p-3.5"><p className="text-[11px] text-muted sm:text-xs">Total outstanding</p><p className="mt-1 whitespace-nowrap font-mono text-lg font-semibold text-ink sm:text-xl">₹24,850</p><p className="mt-1 text-[11px] text-muted sm:text-xs">Across 18 customers</p></div>
-          <div className="min-w-0 border border-line bg-page p-2.5 sm:p-3.5"><p className="text-[11px] text-muted sm:text-xs">Credit today</p><p className="mt-1 whitespace-nowrap font-mono text-lg font-semibold text-brand sm:text-xl">₹1,250</p><p className="mt-1 text-[11px] text-muted sm:text-xs">4 new entries</p></div>
-        </div>
-        <div className="flex items-center justify-between pb-2"><p className="text-sm font-semibold text-ink">Recent khata entries</p><span className="text-xs font-medium text-brand">View all</span></div>
-        <div className="divide-y divide-line border-y border-line">
-          {[["Ramesh Kumar", "Today · 10:42 am", "+ ₹450"], ["Meena Stores", "Today · 9:18 am", "+ ₹320"], ["Suresh Patil", "Yesterday", "− ₹800"]].map(([name, date, amount], index) => (
-            <div key={name} className="flex items-center gap-3 py-3"><span className={`grid size-9 place-items-center rounded-full text-xs font-semibold ${index === 1 ? "bg-[#e6f1f7] text-[#3c647d]" : "bg-info-soft text-info-text"}`}>{name.split(" ").map((part) => part[0]).join("")}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{name}</p><p className="text-xs text-muted">{date}</p></div><p className={`font-mono text-sm font-medium ${amount.startsWith("+") ? "text-danger" : "text-[#2e6a3d]"}`}>{amount}</p></div>
-          ))}
-        </div>
-        <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#fbf6e8] px-2.5 py-2.5 text-[11px] leading-4 text-info-text sm:px-3 sm:text-xs"><Sparkles className="shrink-0" size={15} /><span>Ask Poocho: “Aaj ka total udhaar kitna hai?”</span><ArrowUpRight className="ml-auto shrink-0" size={15} /></div>
-      </div>
-      <div className="absolute -bottom-5 -left-3 hidden items-center gap-2 border border-line bg-white px-3 py-2.5 text-sm shadow-lg sm:flex"><span className="grid size-8 place-items-center rounded-lg bg-[#edf7ef] text-[#2e6a3d]"><ShieldCheck size={17} /></span><span><b className="block text-ink">You stay in control</b><small className="text-muted">Review every entry before saving</small></span></div>
+      <ol className="relative space-y-3 border border-line bg-white p-4 shadow-[0_20px_55px_rgba(58,42,6,0.12)] sm:p-6">
+        {steps.map(({ icon: Icon, title, text }, index) => (
+          <li key={title} className="flex gap-3.5 border-b border-line pb-3 last:border-b-0 last:pb-0">
+            <span className="grid size-10 shrink-0 place-items-center bg-info-soft text-brand">
+              <Icon size={20} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wider text-brand">Step {index + 1}</p>
+              <p className="font-semibold text-ink">{title}</p>
+              <p className="mt-0.5 text-sm leading-6 text-muted">{text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
@@ -257,9 +272,10 @@ function Feature({ icon: Icon, title, children }: { icon: typeof Camera; title: 
   return <article className="border border-line bg-white p-5"><span className="grid size-10 place-items-center bg-info-soft text-brand"><Icon size={20} /></span><h3 className="mt-4 font-semibold text-ink">{title}</h3><p className="mt-1.5 text-sm leading-6 text-muted">{children}</p></article>;
 }
 
-export default function Welcome({ onEnterDemo }: { onEnterDemo: () => void }) {
+export default function Welcome({ onEnterDemo, onSignedIn }: { onEnterDemo: () => void; onSignedIn: (profile: GoogleProfile) => void }) {
   const [view, setView] = useState<AuthView>("landing");
-  if (view !== "landing") return <AuthCard view={view} onBack={() => setView("landing")} onSwitch={setView} onEnterDemo={onEnterDemo} />;
+  if (view !== "landing")
+    return <AuthCard view={view} onBack={() => setView("landing")} onSwitch={setView} onEnterDemo={onEnterDemo} onSignedIn={onSignedIn} />;
 
   return (
     <div className="min-h-dvh overflow-hidden bg-page">
@@ -283,7 +299,7 @@ export default function Welcome({ onEnterDemo }: { onEnterDemo: () => void }) {
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted"><span className="inline-flex items-center gap-1.5"><Check size={15} className="text-brand" /> Easy to get started</span><span className="inline-flex items-center gap-1.5"><Check size={15} className="text-brand" /> You review every entry</span></div>
           </div>
-          <ShopPreview />
+          <HowItWorks />
         </section>
 
         <section className="border-y border-line bg-white">

@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { BookOpen, ChevronLeft, FileText, House, MessageSquare, ScanLine, Search, type LucideIcon } from "lucide-react";
-import { LanguageDropdown, useLanguage } from "../lib/language";
+import { LanguageDropdown, useLang, type TKey } from "../lib/i18n";
 
 /* ---------- Headers ---------- */
 
-export function MainHeader({ onSearch, onLanguage }: { onSearch: () => void; onLanguage?: () => void }) {
+export function MainHeader({ onSearch }: { onSearch: () => void }) {
+  const { t } = useLang();
   return (
     <header className="sticky top-0 z-20 bg-bar">
       <div className="mx-auto flex h-14 max-w-md items-center gap-3 px-4">
@@ -14,7 +15,7 @@ export function MainHeader({ onSearch, onLanguage }: { onSearch: () => void; onL
         <span className="flex-1 text-xl text-logo">
           <span className="font-bold">Hisaab</span>Kitaab
         </span>
-        <button onClick={onSearch} aria-label="Search customers" className="grid size-9 place-items-center text-logo">
+        <button onClick={onSearch} aria-label={t("Search customers")} className="grid size-9 place-items-center text-logo">
           <Search size={22} />
         </button>
         <LanguageDropdown />
@@ -24,13 +25,14 @@ export function MainHeader({ onSearch, onLanguage }: { onSearch: () => void; onL
 }
 
 export function SubHeader({ title, onBack, right }: { title: string; onBack: () => void; right?: ReactNode }) {
+  const { t } = useLang();
   return (
     <header className="sticky top-0 z-20 bg-bar">
       <div className="mx-auto flex h-14 max-w-md items-center gap-3 px-2">
-        <button onClick={onBack} aria-label="Back" className="grid size-10 place-items-center text-logo">
+        <button onClick={onBack} aria-label={t("Back")} className="grid size-10 place-items-center text-logo">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="flex-1 text-lg font-semibold text-logo truncate">{title}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-logo">{title}</h1>
         {right ?? <LanguageDropdown className="mr-2" />}
       </div>
     </header>
@@ -164,23 +166,42 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
   return <section className={`border border-line bg-white ${className}`}>{children}</section>;
 }
 
+/** Grey placeholder shown while data loads */
+export function Skeleton({ className = "h-4 w-24" }: { className?: string }) {
+  return <span className={`inline-block animate-pulse rounded-sm bg-line/70 align-middle ${className}`} />;
+}
+
+/** Placeholder rows for a table/list card while it loads */
+export function SkeletonRows({ rows = 4 }: { rows?: number }) {
+  return (
+    <div aria-busy="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 border-b border-line px-4 py-4 last:border-b-0">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ---------- Bottom navigation ---------- */
 
 export type NavId = "home" | "customers" | "scan" | "ask";
 
-export function BottomNav({ active, onChange }: { active: NavId; onChange: (id: NavId) => void }) {
-  const { t } = useLanguage();
-  const navItems: { id: NavId; label: string; icon: LucideIcon; disabled?: boolean }[] = [
-    { id: "home", label: t("nav_home"), icon: House },
-    { id: "customers", label: t("nav_customers"), icon: FileText },
-    { id: "scan", label: t("nav_scan"), icon: ScanLine },
-    { id: "ask", label: t("nav_ask"), icon: MessageSquare },
-  ];
+const NAV: { id: NavId; label: TKey; icon: LucideIcon; disabled?: boolean }[] = [
+  { id: "home", label: "Home", icon: House },
+  { id: "customers", label: "Customers", icon: FileText },
+  { id: "scan", label: "Scan", icon: ScanLine },
+  { id: "ask", label: "Ask", icon: MessageSquare },
+];
 
+export function BottomNav({ active, onChange }: { active: NavId; onChange: (id: NavId) => void }) {
+  const { t } = useLang();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto grid h-16 max-w-md grid-cols-4">
-        {navItems.map(({ id, label, icon: Icon, disabled }) => {
+        {NAV.map(({ id, label, icon: Icon, disabled }) => {
           const isActive = id === active;
           return (
             <button
@@ -193,7 +214,7 @@ export function BottomNav({ active, onChange }: { active: NavId; onChange: (id: 
             >
               {isActive && <span className="absolute inset-x-0 -top-px h-[3px] bg-brand" />}
               <Icon size={24} strokeWidth={1.8} />
-              {label}
+              {t(label)}
             </button>
           );
         })}

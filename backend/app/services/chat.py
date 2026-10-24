@@ -23,10 +23,13 @@ from app.models import (
     Customer,
     Product,
     ShelfStatus,
+    ShorthandKind,
     StockEntry,
 )
 from app.services import gemma
 from app.services.ledger import customer_balances, ledger_with_running_balance
+from app.services.matching import normalize_text
+from app.services.shorthand import lookup as shorthand_lookup
 
 
 class QueryIntent(str, Enum):
@@ -129,6 +132,13 @@ def find_matching_customer(session: Session, shop_id: int, query_name: str) -> O
     for c in customers:
         if c.name.lower() == cleaned:
             return c
+
+    # 1b. Shorthand the shop has taught the app (Phase 5), e.g. "Rmsh" -> "Ramesh bhau"
+    learned = shorthand_lookup(session, shop_id, ShorthandKind.customer).get(normalize_text(query_name))
+    if learned:
+        for c in customers:
+            if c.name == learned:
+                return c
 
     # 2. Check transliteration dictionary
     transliterated = NAME_TRANSLITERATION.get(cleaned, cleaned)

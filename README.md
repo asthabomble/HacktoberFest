@@ -11,7 +11,9 @@ Marathi, get alerts, and send WhatsApp reminders.
 /docs       Guides
 ```
 
-**Quick start, including opening it on your phone over Wi-Fi: [docs/RUNNING.md](docs/RUNNING.md)**
+**Quick start, including opening it on your phone over Wi-Fi: [docs/demo.md](docs/demo.md)**
+· How it fits together: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+· 3-minute demo: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
 
 ## Prerequisites
 
@@ -139,6 +141,19 @@ Tests verify all 10 Phase 2 requirements (mocked Gemma responses, retry logic, m
 API: `GET /api/customers/{id}/similar`, `POST /api/customers/{id}/merge` (`{"from_id": …}`);
 `POST /api/khata/confirm` accepts `written_name` per row and returns `learned`.
 Tests: `tests/test_phase5.py` (includes "correct an entry, re-upload a similar page, it's now right").
+
+### Voice + demo polish (Phase 6)
+
+- **Voice entry:** 🎤 on the khata scan screen. Say or type "Ramesh ko 500 udhaar diya, Sunita ne 200 jama kiye";
+  Gemma turns it into rows on the same Review screen (learned shorthand and name matching apply, numbers in
+  words like "paanch sau" / "dedh hazaar" work). **+ Entry** on a customer page has a "Bol kar bharein" mic too.
+  `POST /api/khata/voice` (`{"text": …}`), nothing is saved until you confirm.
+- **Spoken questions:** the mic in Pucho sends the question as soon as you stop speaking.
+- **Language dropdown** in the header: English, Hindi, Marathi, Hinglish across every screen (`frontend/src/lib/i18n.tsx`, `translations.ts`), remembered per device.
+- **Loading states:** grey placeholders while data loads instead of empty/zero values.
+- **Seed data:** `python -m scripts.seed_demo` (see [docs/demo.md](docs/demo.md#6-demo-data-optional)); refuses to
+  wipe a database with customers unless `--yes`.
+- Tests: `tests/test_phase6.py`.
 
 ## Switching the AI provider
 

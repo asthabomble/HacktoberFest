@@ -1,6 +1,7 @@
 import { ChevronRight, MessageCircle } from "lucide-react";
 import type { CustomerSummary } from "../lib/api";
 import { formatRupees } from "../lib/format";
+import { useLang } from "../lib/i18n";
 
 /** CUSTOMER / DUE / DAYS table from the design. Days turn red once overdue. */
 export default function CustomerTable({
@@ -16,14 +17,15 @@ export default function CustomerTable({
   onReminder?: (customer: CustomerSummary) => void;
   action?: "message" | "chevron";
 }) {
+  const { t } = useLang();
   return (
     <table className="w-full table-fixed text-left">
       <thead>
         <tr className="border-b border-line bg-soft text-xs font-medium uppercase tracking-wider text-muted">
-          <th className="py-2.5 pl-4 font-medium">Customer</th>
-          <th className="w-28 py-2.5 text-right font-medium">Due</th>
-          <th className="w-16 py-2.5 text-right font-medium">Days</th>
-          <th className="w-12" />
+          <th className="py-2.5 pl-4 font-medium">{t("Customer")}</th>
+          <th className="w-24 py-2.5 text-right font-medium">{t("Due")}</th>
+          <th className="w-14 py-2.5 text-right font-medium">{t("Days")}</th>
+          <th className="w-11" />
         </tr>
       </thead>
       <tbody>
@@ -47,8 +49,8 @@ export default function CustomerTable({
                       onReminder(c);
                     }
                   }}
-                  aria-label={`Send reminder to ${c.name}`}
-                  className="ml-auto flex items-center justify-center p-1 text-brand hover:text-brand-strong"
+                  aria-label={t("Send reminder to {name}", { name: c.name })}
+                  className="ml-auto flex items-center justify-center p-1 text-brand hover:text-logo"
                 >
                   <MessageCircle size={20} />
                 </button>

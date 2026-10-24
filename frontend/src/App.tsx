@@ -6,7 +6,7 @@ import Home, { type HomeTab } from "./screens/Home";
 import Scan, { type ScanMode } from "./screens/Scan";
 import Poocho from "./screens/Poocho";
 import ProductDetail from "./screens/Stock";
-import Welcome from "./screens/Welcome";
+import Welcome, { type GoogleProfile } from "./screens/Welcome";
 
 type MainRoute = { name: "home"; tab?: HomeTab } | { name: "customers"; focusSearch?: boolean };
 type Route =
@@ -16,8 +16,26 @@ type Route =
   | { name: "product"; id: number }
   | { name: "ask" };
 
+type Session = { kind: "demo" } | { kind: "google"; profile: GoogleProfile };
+
+function loadSession(): Session | null {
+  try {
+    return JSON.parse(localStorage.getItem("hisaab_session") ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session: Session) {
+  try {
+    localStorage.setItem("hisaab_session", JSON.stringify(session));
+  } catch {
+    // storage blocked: session lasts for this visit only
+  }
+}
+
 export default function App() {
-  const [enteredDemo, setEnteredDemo] = useState(false);
+  const [session, setSession] = useState<Session | null>(loadSession);
   const [route, setRoute] = useState<Route>({ name: "home" });
   const [toast, setToast] = useState("");
 
@@ -25,7 +43,29 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [route]);
 
-  if (!enteredDemo) return <Welcome onEnterDemo={() => setEnteredDemo(true)} />;
+  function startSession(next: Session) {
+    saveSession(next);
+    setSession(next);
+  }
+
+  function signOut() {
+    try {
+      localStorage.removeItem("hisaab_session");
+    } catch {
+      // nothing stored
+    }
+    setSession(null);
+    setRoute({ name: "home" });
+  }
+
+  if (!session) {
+    return (
+      <Welcome
+        onEnterDemo={() => startSession({ kind: "demo" })}
+        onSignedIn={(profile) => startSession({ kind: "google", profile })}
+      />
+    );
+  }
 
   function showToast(text: string) {
     setToast(text);
@@ -77,13 +117,12 @@ export default function App() {
 
   return (
     <>
-      <MainHeader
-        onSearch={() => setRoute({ name: "customers", focusSearch: true })}
-        onLanguage={() => showToast("Hindi UI jald aa raha hai (Phase 6)")}
-      />
+      <MainHeader onSearch={() => setRoute({ name: "customers", focusSearch: true })} />
       <main className="pb-24">
         {route.name === "home" && (
           <Home
+            account={session.kind === "google" ? session.profile : null}
+            onSignOut={signOut}
             initialTab={route.tab}
             onOpenCustomer={openCustomer}
             onOpenProduct={(id) => setRoute({ name: "product", id })}

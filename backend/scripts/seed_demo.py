@@ -1,13 +1,23 @@
 """Seed script with realistic kirana demo data for HisaabKitaab.
 
-Populates:
-- Shop ("Sharma Kirana Store")
-- Customers with varied credit balances (some > 500, some < 500, one zero)
-- Credit entries spanning today, this month, and previous transactions
-- Products with stock entries (some below threshold, some healthy)
+Populates (dates are relative to today, so the demo always looks fresh):
+- Shop "Sharma Kirana Store"
+- 10 customers: 3 overdue (30+ days since last payment), udhaar today, one fully paid
+- Credit entries with real-looking khata notes in Hindi/Marathi/English
+- 7 products from a supplier bill + sales; 4 are low (by count or by shelf photo)
+- Learned shorthand ("Rmsh" = Ramesh bhau, "ch" = Sugar / Cheeni) so Phase 5 shows up in the demo
+
+Usage (from backend/):
+    DATABASE_URL=sqlite:///./data/demo.db python -m scripts.seed_demo     # separate demo DB (recommended)
+    python -m scripts.seed_demo --yes                                     # replace data in the main DB
+
+It deletes existing customers, entries, products and shorthand first. Without --yes it refuses
+to touch a database that already has customers.
 """
 
 import datetime as dt
+import sys
+
 from sqlmodel import Session, select
 
 from app.db import engine, init_db
@@ -18,13 +28,91 @@ from app.models import (
     Customer,
     Product,
     ShelfStatus,
+    ShorthandKind,
+    ShorthandMap,
     Shop,
     StockEntry,
     StockEntryKind,
+    SupplierBill,
 )
 
+GAVE, GOT = CreditType.gave, CreditType.got
 
-def seed():
+# name, language, [(days ago, type, amount, khata note)]
+CUSTOMERS = [
+    ("Ramesh bhau", "hi", [
+        (57, GAVE, 3350, "Opening balance"),
+        (49, GAVE, 310, "Doodh, biscuit"),
+        (42, GOT, 1000, "Payment (cash)"),
+        (22, GAVE, 640, "Toor dal, chawal"),
+        (13, GAVE, 2180, "Monthly ration"),
+        (5, GAVE, 520, "Atta 10kg"),
+        (0, GAVE, 450, "Rmsh 450 ch+tel"),
+    ]),
+    ("Sunita tai", "mr", [
+        (18, GAVE, 3800, "किराणा महिना"),
+        (0, GAVE, 320, "सुनीता ३२०"),
+    ]),
+    ("Iqbal chacha", "hi", [
+        (50, GAVE, 3500, "Ration + tel"),
+        (35, GOT, 1000, "Iqbl jama 1000"),
+        (20, GAVE, 1380, "Chawal 10kg, dal"),
+    ]),
+    ("Suresh Patil", "mr", [
+        (14, GAVE, 3500, "राशन + तेल उधारी 3500"),
+        (1, GOT, 300, "रोख जमा 300"),
+    ]),
+    ("Pappu (dhaba)", "hi", [
+        (9, GAVE, 1900, "Chai patti, cheeni, doodh"),
+        (3, GAVE, 860, "Pp 860 tel"),
+    ]),
+    ("Meena didi", "hi", [
+        (31, GAVE, 2300, "Sabun, masala, tel"),
+    ]),
+    ("Priya Sharma", "hi", [
+        (6, GAVE, 1300, "किराना सामान 1300"),
+        (2, GOT, 400, "GPay jama 400"),
+    ]),
+    ("Amit Shinde", "mr", [
+        (0, GAVE, 850, "गहू पीठ + साबण 850"),
+    ]),
+    ("Deepak Verma", "hi", [
+        (1, GAVE, 150, "बिस्किट + नमकीन 150"),
+    ]),
+    ("Ganesh bhau", "mr", [
+        (20, GAVE, 500, "उधारी 500"),
+        (10, GOT, 500, "पूर्ण भरपाई 500"),
+    ]),
+]
+
+# name, unit, low-stock threshold, bought on the supplier bill (qty, rate), sold since
+PRODUCTS = [
+    ("Tata Salt 1kg", "packet", 10, (20, 24), 16),            # 4 left  -> low
+    ("Aashirvaad Atta 5kg", "packet", 5, (10, 245), 8),       # 2 left  -> low
+    ("Fortune Oil 1L", "pouch", 8, (25, 145), 13),            # 12 left -> ok
+    ("Sugar / Cheeni", "kg", 25, (50, 42), 42),               # 8 left  -> low
+    ("Maggi Noodles", "packet", 20, (60, 14), 25),            # 35 left -> ok
+    ("Parle-G Biscuits", "packet", 15, (40, 10), 15),         # 25 left, but shelf photo says low
+    ("Toor Dal Premium", "kg", 10, (30, 128), 12),            # 18 left -> ok
+]
+
+SHELF_CHECKS = [
+    ("Parle-G Biscuits", ShelfStatus.low, "Front rack almost empty, 2-3 packets visible"),
+    ("Maggi Noodles", ShelfStatus.full, "Top shelf fully stacked"),
+]
+
+SHORTHAND = [
+    ("Rmsh", "Ramesh bhau", ShorthandKind.customer),
+    ("Iqbl", "Iqbal chacha", ShorthandKind.customer),
+    ("Pp", "Pappu (dhaba)", ShorthandKind.customer),
+    ("सुनीता", "Sunita tai", ShorthandKind.customer),
+    ("ch", "Sugar / Cheeni", ShorthandKind.product),
+    ("tel", "Fortune Oil 1L", ShorthandKind.product),
+]
+
+
+def seed(force: bool = True) -> bool:
+    """Replace demo data. Returns False (and changes nothing) if data exists and force is False."""
     init_db()
     with Session(engine) as session:
         shop = session.exec(select(Shop)).first()
@@ -34,238 +122,88 @@ def seed():
             session.commit()
             session.refresh(shop)
 
-        # Clear existing entries for fresh demo seed
-        for model in (StockEntry, Product, CreditEntry, Customer):
+        if not force and session.exec(select(Customer)).first():
+            return False
+
+        # Children before parents (foreign keys)
+        for model in (StockEntry, SupplierBill, ShorthandMap, CreditEntry, Product, Customer):
             for row in session.exec(select(model)).all():
                 session.delete(row)
         session.commit()
 
         today = dt.date.today()
-        yesterday = today - dt.timedelta(days=1)
-        last_week = today - dt.timedelta(days=7)
-        first_of_month = today.replace(day=1)
-        two_weeks_ago = today - dt.timedelta(days=14)
-        forty_days_ago = today - dt.timedelta(days=40)
+        now = dt.datetime.now(dt.timezone.utc)
 
-        # 1. Customers
-        customers_data = [
-            {"name": "Suresh Patil", "phone": "9876543211", "lang": "mr"},
-            {"name": "Priya Sharma", "phone": "9876543214", "lang": "hi"},
-            {"name": "Ramesh Kumar", "phone": "9876543210", "lang": "hi"},
-            {"name": "Amit Shinde", "phone": "9876543213", "lang": "mr"},
-            {"name": "Sunita Bai", "phone": "9876543212", "lang": "hi"},
-            {"name": "Deepak Verma", "phone": "9876543215", "lang": "hi"},
-            {"name": "Ganesh Bhau", "phone": "9876543216", "lang": "mr"},
-        ]
-
-        customer_map = {}
-        for c in customers_data:
-            cust = Customer(shop_id=shop.id, name=c["name"], phone=c["phone"], language=c["lang"])
-            session.add(cust)
+        for name, language, entries in CUSTOMERS:
+            customer = Customer(shop_id=shop.id, name=name, language=language)
+            session.add(customer)
             session.flush()
-            customer_map[c["name"]] = cust
+            for days_ago, kind, amount, note in entries:
+                session.add(
+                    CreditEntry(
+                        shop_id=shop.id,
+                        customer_id=customer.id,
+                        amount=amount,
+                        type=kind,
+                        entry_date=today - dt.timedelta(days=days_ago),
+                        raw_text=note,
+                        confidence=Confidence.high,
+                        confirmed=True,
+                    )
+                )
 
-        # 2. Credit Entries
-        # Suresh: gave 3500, got 300 -> net owes 3200
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Suresh Patil"].id,
-                amount=3500.0,
-                type=CreditType.gave,
-                entry_date=two_weeks_ago,
-                raw_text="राशन + तेल उधारी 3500",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
+        bill_date = today - dt.timedelta(days=12)
+        bill = SupplierBill(
+            shop_id=shop.id,
+            supplier_name="Gupta Traders",
+            bill_date=bill_date,
+            stated_total=sum(qty * rate for _, _, _, (qty, rate), _ in PRODUCTS),
+            calculated_total=sum(qty * rate for _, _, _, (qty, rate), _ in PRODUCTS),
+            confirmed=True,
         )
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Suresh Patil"].id,
-                amount=300.0,
-                type=CreditType.got,
-                entry_date=yesterday,
-                raw_text="रोख जमा 300",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
+        session.add(bill)
+        session.flush()
 
-        # Priya: gave 2500, got 400 -> net owes 2100
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Priya Sharma"].id,
-                amount=2500.0,
-                type=CreditType.gave,
-                entry_date=last_week,
-                raw_text="किराना सामान 2500",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Priya Sharma"].id,
-                amount=400.0,
-                type=CreditType.got,
-                entry_date=yesterday,
-                raw_text="GPay jama 400",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-
-        # Ramesh: gave 1200 (first of month), gave 650 (today), got 400 (today) -> net owes 1450
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Ramesh Kumar"].id,
-                amount=1200.0,
-                type=CreditType.gave,
-                entry_date=first_of_month,
-                raw_text="दाल चावल 1200",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Ramesh Kumar"].id,
-                amount=650.0,
-                type=CreditType.gave,
-                entry_date=today,
-                raw_text="रिफाइंड तेल + चीनी 650",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Ramesh Kumar"].id,
-                amount=400.0,
-                type=CreditType.got,
-                entry_date=today,
-                raw_text="रोकड़ दिया 400",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-
-        # Amit: gave 850 (today) -> net owes 850
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Amit Shinde"].id,
-                amount=850.0,
-                type=CreditType.gave,
-                entry_date=today,
-                raw_text="गहू पीठ + साबण 850",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-
-        # Sunita Bai: gave 450 (40 days ago) -> net owes 450 (overdue)
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Sunita Bai"].id,
-                amount=450.0,
-                type=CreditType.gave,
-                entry_date=forty_days_ago,
-                raw_text="मसाला + चायपत्ती 450",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-
-        # Deepak Verma: gave 150 (yesterday) -> net owes 150
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Deepak Verma"].id,
-                amount=150.0,
-                type=CreditType.gave,
-                entry_date=yesterday,
-                raw_text="बिस्किट + नमकीन 150",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-
-        # Ganesh Bhau: gave 500, got 500 -> net owes 0
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Ganesh Bhau"].id,
-                amount=500.0,
-                type=CreditType.gave,
-                entry_date=two_weeks_ago,
-                raw_text="उधारी 500",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-        session.add(
-            CreditEntry(
-                shop_id=shop.id,
-                customer_id=customer_map["Ganesh Bhau"].id,
-                amount=500.0,
-                type=CreditType.got,
-                entry_date=last_week,
-                raw_text="पूर्ण भरपाई 500",
-                confidence=Confidence.high,
-                confirmed=True,
-            )
-        )
-
-        # 3. Products and Stock
-        products_data = [
-            {"name": "Tata Salt 1kg", "unit": "packet", "threshold": 10.0, "purchased": 20.0, "sold": 16.0},  # stock: 4 (LOW)
-            {"name": "Aashirvaad Atta 5kg", "unit": "packet", "threshold": 5.0, "purchased": 10.0, "sold": 8.0},  # stock: 2 (LOW)
-            {"name": "Fortune Oil 1L", "unit": "pouch", "threshold": 8.0, "purchased": 25.0, "sold": 13.0},  # stock: 12 (OK)
-            {"name": "Sugar / Cheeni", "unit": "kg", "threshold": 25.0, "purchased": 50.0, "sold": 42.0},  # stock: 8 (LOW)
-            {"name": "Maggi Noodles", "unit": "packet", "threshold": 20.0, "purchased": 60.0, "sold": 25.0},  # stock: 35 (OK)
-            {"name": "Parle-G Biscuits", "unit": "packet", "threshold": 15.0, "purchased": 30.0, "sold": 25.0},  # stock: 5 (LOW)
-            {"name": "Toor Dal Premium", "unit": "kg", "threshold": 10.0, "purchased": 30.0, "sold": 12.0},  # stock: 18 (OK)
-        ]
-
-        for p in products_data:
-            prod = Product(shop_id=shop.id, name=p["name"], unit=p["unit"], low_stock_threshold=p["threshold"])
-            session.add(prod)
+        products = {}
+        for name, unit, threshold, (qty, rate), sold in PRODUCTS:
+            product = Product(shop_id=shop.id, name=name, unit=unit, low_stock_threshold=threshold)
+            session.add(product)
             session.flush()
+            products[name] = product
+            session.add(StockEntry(
+                shop_id=shop.id, product_id=product.id, supplier_bill_id=bill.id, kind=StockEntryKind.purchase,
+                qty_change=qty, rate=rate, raw_text=f"{name} {qty} x {rate}", confirmed=True,
+                created_at=now - dt.timedelta(days=12),
+            ))
+            session.add(StockEntry(
+                shop_id=shop.id, product_id=product.id, kind=StockEntryKind.sale,
+                qty_change=-sold, confirmed=True, created_at=now - dt.timedelta(days=2),
+            ))
 
-            # Purchase entry
-            session.add(
-                StockEntry(
-                    shop_id=shop.id,
-                    product_id=prod.id,
-                    kind=StockEntryKind.purchase,
-                    qty_change=p["purchased"],
-                    confirmed=True,
-                )
-            )
-            # Sale entry
-            session.add(
-                StockEntry(
-                    shop_id=shop.id,
-                    product_id=prod.id,
-                    kind=StockEntryKind.sale,
-                    qty_change=-p["sold"],
-                    confirmed=True,
-                )
-            )
+        for name, status, evidence in SHELF_CHECKS:
+            session.add(StockEntry(
+                shop_id=shop.id, product_id=products[name].id, kind=StockEntryKind.shelf_check,
+                qty_change=0, shelf_status=status, raw_text=evidence, confirmed=True,
+                created_at=now - dt.timedelta(hours=3),
+            ))
+
+        for token, meaning, kind in SHORTHAND:
+            session.add(ShorthandMap(shop_id=shop.id, token=token, meaning=meaning, kind=kind))
 
         session.commit()
         print("Demo data seeded successfully:")
-        print(f"  Customers: {len(customers_data)}")
-        print(f"  Products: {len(products_data)}")
+        print(f"  Customers: {len(CUSTOMERS)}")
+        print(f"  Products: {len(PRODUCTS)}")
+        print(f"  Shorthand: {len(SHORTHAND)}")
+        return True
 
 
 if __name__ == "__main__":
-    seed()
+    if not seed(force="--yes" in sys.argv):
+        sys.exit(
+            "This database already has customers. Seeding would DELETE them.\n"
+            "Use a separate demo database:\n"
+            "  DATABASE_URL=sqlite:///./data/demo.db python -m scripts.seed_demo\n"
+            "or replace the data on purpose:\n"
+            "  python -m scripts.seed_demo --yes"
+        )

@@ -3,20 +3,23 @@ import { Camera } from "lucide-react";
 import CustomerTable from "../components/CustomerTable";
 import ReminderSheet from "../components/ReminderSheet";
 import type { ScanMode } from "./Scan";
+import type { GoogleProfile } from "./Welcome";
 import { StockList } from "./Stock";
-import { Card, Chip, PrimaryButton, Tabs } from "../components/ui";
+import { Card, Chip, PrimaryButton, Skeleton, SkeletonRows, Tabs } from "../components/ui";
 import { apiGet, type CustomerList, type CustomerSummary, type Overview } from "../lib/api";
 import { formatRupees, formatToday } from "../lib/format";
-import { useLanguage } from "../lib/language";
+import { reminderLang, useLang } from "../lib/i18n";
 
 export type HomeTab = "overview" | "udhaar" | "stock" | "alerts";
 
-function Stat({ label, value, tone, className = "" }: { label: string; value: string; tone?: "red" | "brown"; className?: string }) {
+function Stat({ label, value, tone, className = "" }: { label: string; value?: string | null; tone?: "red" | "brown"; className?: string }) {
   const color = tone === "red" ? "text-danger" : tone === "brown" ? "text-brand" : "text-ink";
   return (
     <div className={`border-line p-4 ${className}`}>
       <p className="text-sm text-muted">{label}</p>
-      <p className={`mt-1 font-mono text-2xl font-semibold leading-tight ${color}`}>{value}</p>
+      <p className={`mt-1 font-mono text-2xl font-semibold leading-tight ${color}`}>
+        {value ?? <Skeleton className="h-7 w-24" />}
+      </p>
     </div>
   );
 }
@@ -26,19 +29,23 @@ function Empty({ children }: { children: string }) {
 }
 
 export default function Home({
+  account,
+  onSignOut,
   initialTab = "overview",
   onOpenCustomer,
   onOpenProduct,
   onScan,
   onViewAll,
 }: {
+  account: GoogleProfile | null;
+  onSignOut: () => void;
   initialTab?: HomeTab;
   onOpenCustomer: (id: number) => void;
   onOpenProduct: (id: number) => void;
   onScan: (mode: ScanMode) => void;
   onViewAll: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLang();
   const [tab, setTab] = useState<HomeTab>(initialTab);
   const [data, setData] = useState<Overview | null>(null);
   const [all, setAll] = useState<CustomerList | null>(null);
@@ -56,22 +63,29 @@ export default function Home({
       .catch((e) => setError(e.message));
   }, []);
 
+  const loading = !data && !error;
   const owing = (all?.customers ?? []).filter((c) => c.balance > 0);
-  const overdue = owing.filter((c) => c.days_due >= (data?.overdue_days ?? 30));
+  const overdueDays = data?.overdue_days ?? 30;
+  const overdue = owing.filter((c) => c.days_due >= overdueDays);
   const lowStockAlerts = data?.low_stock_alerts ?? [];
-  const totalAlertsCount = overdue.length + lowStockAlerts.length;
 
   return (
     <>
       <div className="border-b border-line bg-white">
         <div className="mx-auto max-w-md px-4 py-3">
           <div className="flex items-baseline justify-between gap-2">
-            <h2 className="truncate text-xl font-semibold">{data?.shop.name ?? "…"}</h2>
-            <span className="shrink-0 text-sm text-muted">{formatToday()}</span>
+            <h2 className="truncate text-xl font-semibold">{data ? data.shop.name : <Skeleton className="h-6 w-44" />}</h2>
+            <span className="shrink-0 text-sm text-muted">{formatToday(lang)}</span>
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Chip>{t("customers_chip", { count: data?.customer_count ?? 0 })}</Chip>
-            {loadedAt && <Chip tone="gray">{t("updated_chip", { time: loadedAt })}</Chip>}
+            <Chip>{t("{n} customers", { n: data?.customer_count ?? 0 })}</Chip>
+            {loadedAt && <Chip tone="gray">{t("Updated {time}", { time: loadedAt })}</Chip>}
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-3 text-sm text-muted">
+            <span className="min-w-0 truncate">{account ? t("Signed in as {name}", { name: account.name }) : t("Demo mode")}</span>
+            <button onClick={onSignOut} className="min-h-11 shrink-0 font-medium text-brand">
+              {t("Log out")}
+            </button>
           </div>
         </div>
       </div>
@@ -80,62 +94,75 @@ export default function Home({
         active={tab}
         onChange={setTab}
         tabs={[
-          { id: "overview", label: t("tab_overview") },
-          { id: "udhaar", label: t("tab_udhaar") },
-          { id: "stock", label: t("tab_stock") },
-          { id: "alerts", label: t("tab_alerts"), badge: totalAlertsCount },
+          { id: "overview", label: t("Overview") },
+          { id: "udhaar", label: t("Udhaar") },
+          { id: "stock", label: t("Stock") },
+          { id: "alerts", label: t("Alerts"), badge: overdue.length + lowStockAlerts.length },
         ]}
       />
 
       <div className="mx-auto max-w-md space-y-5 px-4 py-4">
-        {error && <p className="text-sm text-danger">Server error: {error}</p>}
+        {error && <p className="text-sm text-danger">{t("Server se data nahi mila: {error}", { error })}</p>}
 
         {tab === "overview" && (
           <>
             <Card className="grid grid-cols-2">
-              <Stat label={t("total_outstanding")} value={formatRupees(data?.total_outstanding ?? 0)} className="border-b border-r" />
-              <Stat label={t("udhaar_today")} value={formatRupees(data?.udhaar_today ?? 0)} className="border-b" />
-              <Stat label={t("overdue_label", { days: data?.overdue_days ?? 30 })} value={String(data?.overdue_count ?? 0)} tone="red" className="border-r" />
-              <Stat label={t("low_stock_items")} value={data?.low_stock_count == null ? "—" : String(data.low_stock_count)} tone="brown" />
+              <Stat label={t("Total outstanding")} value={data && formatRupees(data.total_outstanding)} className="border-b border-r" />
+              <Stat label={t("Udhaar today")} value={data && formatRupees(data.udhaar_today)} className="border-b" />
+              <Stat
+                label={t("Overdue {n}+ days", { n: overdueDays })}
+                value={data && String(data.overdue_count)}
+                tone="red"
+                className="border-r"
+              />
+              <Stat
+                label={t("Low stock items")}
+                value={data && (data.low_stock_count == null ? "—" : String(data.low_stock_count))}
+                tone="brown"
+              />
             </Card>
 
             <Card>
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h3 className="text-lg font-semibold">{t("top_debtors")}</h3>
+                <h3 className="text-lg font-semibold">{t("Top debtors")}</h3>
                 <button onClick={onViewAll} className="font-medium text-brand">
-                  {t("view_all")}
+                  {t("View all")}
                 </button>
               </div>
-              {data && data.top_debtors.length > 0 ? (
+              {loading ? (
+                <SkeletonRows rows={5} />
+              ) : data && data.top_debtors.length > 0 ? (
                 <CustomerTable
                   customers={data.top_debtors}
                   overdueDays={data.overdue_days}
                   onOpen={onOpenCustomer}
-                  onReminder={(c) => setReminderCustomer(c)}
+                  onReminder={setReminderCustomer}
                 />
               ) : (
-                <Empty>{t("empty_no_debtors")}</Empty>
+                <Empty>{t("Abhi koi udhaar nahi. Pehla khata page scan karein.")}</Empty>
               )}
             </Card>
 
             <PrimaryButton icon={Camera} onClick={() => onScan("khata")} className="w-full">
-              {t("scan_khata_btn")}
+              {t("Scan khata page")}
             </PrimaryButton>
           </>
         )}
 
         {tab === "udhaar" && (
           <Card>
-            {owing.length > 0 ? (
+            {loading ? (
+              <SkeletonRows />
+            ) : owing.length > 0 ? (
               <CustomerTable
                 customers={owing}
-                overdueDays={all!.overdue_days}
+                overdueDays={overdueDays}
                 onOpen={onOpenCustomer}
-                onReminder={(c) => setReminderCustomer(c)}
+                onReminder={setReminderCustomer}
                 action="chevron"
               />
             ) : (
-              <Empty>{t("empty_all_settled")}</Empty>
+              <Empty>{t("Kisi ka udhaar baaki nahi.")}</Empty>
             )}
           </Card>
         )}
@@ -146,57 +173,56 @@ export default function Home({
 
         {tab === "alerts" && (
           <>
-            <Card>
-              <div className="border-b border-line px-4 py-3">
-                <h3 className="text-lg font-semibold">{t("tab_alerts")}</h3>
-                <p className="text-sm text-muted">
-                  {t("overdue_subtext", { days: data?.overdue_days ?? 30 })}
-                </p>
-              </div>
-              {overdue.length > 0 ? (
-                <CustomerTable
-                  customers={overdue}
-                  overdueDays={all!.overdue_days}
-                  onOpen={onOpenCustomer}
-                  onReminder={(c) => setReminderCustomer(c)}
-                />
-              ) : (
-                <Empty>{t("empty_no_overdue")}</Empty>
-              )}
-            </Card>
+          <Card>
+            <div className="border-b border-line px-4 py-3">
+              <h3 className="text-lg font-semibold">{t("Overdue udhaar")}</h3>
+              <p className="text-sm text-muted">{t("{n}+ din se koi payment nahi aaya", { n: overdueDays })}</p>
+            </div>
+            {loading ? (
+              <SkeletonRows rows={3} />
+            ) : overdue.length > 0 ? (
+              <CustomerTable customers={overdue} overdueDays={overdueDays} onOpen={onOpenCustomer} onReminder={setReminderCustomer} />
+            ) : (
+              <Empty>{t("Koi overdue nahi. Sab theek hai.")}</Empty>
+            )}
+          </Card>
 
-            <Card>
-              <div className="border-b border-line px-4 py-3">
-                <h3 className="text-lg font-semibold">Low stock items</h3>
-                <p className="text-sm text-muted">Configured threshold se kam quantity bachi hai</p>
+          <Card>
+            <div className="border-b border-line px-4 py-3">
+              <h3 className="text-lg font-semibold">{t("Low stock items")}</h3>
+              <p className="text-sm text-muted">{t("Threshold se kam bacha hai, ya shelf photo mein kam dikha")}</p>
+            </div>
+            {loading ? (
+              <SkeletonRows rows={3} />
+            ) : lowStockAlerts.length > 0 ? (
+              <div className="divide-y divide-line">
+                {lowStockAlerts.map((item) => (
+                  <button
+                    key={item.product_id}
+                    onClick={() => onOpenProduct(item.product_id)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-left active:bg-soft"
+                  >
+                    <span className="min-w-0 pr-3">
+                      <span className="block truncate text-[15px] font-semibold">{item.product_name}</span>
+                      <span className="block text-xs text-muted">
+                        {item.shelf_low && item.current_stock > item.threshold
+                          ? t("Shelf photo mein kam")
+                          : t("Threshold: {n} {unit}", { n: item.threshold, unit: item.unit })}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block font-mono text-base font-semibold text-danger">
+                        {item.current_stock} {item.unit}
+                      </span>
+                      <span className="text-xs font-medium text-danger">{t("Low stock")}</span>
+                    </span>
+                  </button>
+                ))}
               </div>
-              {lowStockAlerts.length > 0 ? (
-                <div className="divide-y divide-line">
-                  {lowStockAlerts.map((item) => (
-                    <div
-                      key={item.product_id}
-                      onClick={() => onOpenProduct(item.product_id)}
-                      className="flex cursor-pointer items-center justify-between px-4 py-3 active:bg-soft"
-                    >
-                      <div className="min-w-0 pr-3">
-                        <p className="truncate font-semibold text-ink text-[15px]">{item.product_name}</p>
-                        <p className="text-xs text-muted">
-                          Threshold: {item.threshold} {item.unit}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="font-mono text-base font-semibold text-danger">
-                          {item.current_stock} {item.unit}
-                        </p>
-                        <span className="text-xs font-medium text-danger">Low stock</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty>Sabhi products ka stock theek hai.</Empty>
-              )}
-            </Card>
+            ) : (
+              <Empty>{t("Sabhi products ka stock theek hai.")}</Empty>
+            )}
+          </Card>
           </>
         )}
       </div>
@@ -207,7 +233,7 @@ export default function Home({
           customerName={reminderCustomer.name}
           balance={reminderCustomer.balance}
           phone={reminderCustomer.phone}
-          initialLanguage={data?.shop.language || "hi"}
+          initialLanguage={reminderLang(lang)}
           onClose={() => setReminderCustomer(null)}
         />
       )}

@@ -132,3 +132,35 @@ async def extract_rows(
     prompt = PROMPT.format(year=date.today().year, shop_context=shop_context)
     result = await gemma.generate_json(prompt, KhataExtraction, images=[image])
     return [resolve_name(apply_sanity_checks(r), customers or [], shorthand or {}) for r in result.rows]
+
+
+VOICE_PROMPT = """A kirana shopkeeper spoke (or typed) entries for their credit ledger, in Hindi, Marathi, English or a mix.
+The text may come from speech recognition, so expect spelling mistakes and numbers written as words
+("paanch sau" = 500, "पाँच सौ" = 500, "dedh hazaar" = 1500).
+
+Text: "{text}"
+
+Turn it into rows (one per person + amount):
+- written_name: the person's name as said, e.g. "Ramesh" or "सुनीता".
+- customer_name: if it clearly refers to one of this shop's existing customers, that customer's exact name; else written_name.
+- amount: rupees as a number.
+- type: "gave" if the shopkeeper gave goods/credit (udhaar, diya, liya, le gaya, उधार, दिया); "got" if they received money (jama, mila, de gaya, paid, जमा, मिला).
+- date: YYYY-MM-DD only if a day is said ("kal" = yesterday relative to {today}), else null.
+- raw_text: the part of the text this row came from.
+- confidence: "high" if name, amount and type are all clear; otherwise "low".
+
+If there are no entries in the text, return {{"rows": []}}.
+
+{shop_context}"""
+
+
+async def extract_from_text(
+    text: str,
+    shop_context: str = "",
+    customers: list[str] | None = None,
+    shorthand: dict[str, str] | None = None,
+) -> list[ResolvedRow]:
+    """Voice/typed entry ("Ramesh ko 500 udhaar diya") -> the same rows a khata photo gives."""
+    prompt = VOICE_PROMPT.format(text=text.replace('"', "'"), today=date.today().isoformat(), shop_context=shop_context)
+    result = await gemma.generate_json(prompt, KhataExtraction)
+    return [resolve_name(apply_sanity_checks(r), customers or [], shorthand or {}) for r in result.rows]

@@ -1,7 +1,7 @@
 """Rule-based alerts for HisaabKitaab.
 
 Calculates:
-1. Low-stock alerts: products where current quantity is below the configured threshold.
+1. Low-stock alerts: same rule as the rest of the app (count at/below threshold, or shelf photo says low).
 2. Overdue-udhaar alerts: customers with a positive outstanding balance and unpaid credit
    older than a configurable number of days (default 30).
 """
@@ -10,35 +10,37 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from app.models import Product
+from app.models import ShelfStatus
 from app.services.ledger import OVERDUE_DAYS, customer_summaries
-from app.services.stock import calculate_product_stock
+from app.services.stock import list_shop_products
 
 
 def get_low_stock_alerts(session: Session, shop_id: int) -> list[dict[str, Any]]:
-    """Find products whose recorded stock is below their configured low-stock threshold."""
-    products = session.exec(
-        select(Product).where(Product.shop_id == shop_id).order_by(Product.name)
-    ).all()
-
+    """Products that are low by the app-wide rule (stock.is_low_stock): counted stock at/below the
+    threshold, or the latest shelf photo said "low". Same rule as the Home "Low stock items" count."""
     alerts = []
-    for p in products:
-        threshold = p.low_stock_threshold or 0
-        if threshold <= 0:
+    for p in list_shop_products(session, shop_id):
+        if not p["is_low"]:
             continue
-        stock = calculate_product_stock(session, p.id)
-        if stock < threshold:
-            alerts.append(
-                {
-                    "product_id": p.id,
-                    "product_name": p.name,
-                    "unit": p.unit,
-                    "current_stock": stock,
-                    "threshold": threshold,
-                    "shortage": round(threshold - stock, 2),
-                    "message": f"{p.name}: {stock} {p.unit} remaining (threshold: {threshold} {p.unit})",
-                }
-            )
+        threshold = p["low_stock_threshold"] or 0
+        stock = p["current_stock"]
+        shelf_low = p["shelf_status"] == ShelfStatus.low
+        alerts.append(
+            {
+                "product_id": p["id"],
+                "product_name": p["name"],
+                "unit": p["unit"],
+                "current_stock": stock,
+                "threshold": threshold,
+                "shortage": round(max(threshold - stock, 0), 2),
+                "shelf_low": shelf_low,
+                "message": (
+                    f"{p['name']}: shelf photo shows low stock ({stock} {p['unit']} counted)"
+                    if shelf_low and stock > threshold
+                    else f"{p['name']}: {stock} {p['unit']} remaining (threshold: {threshold} {p['unit']})"
+                ),
+            }
+        )
     return sorted(alerts, key=lambda a: (a["current_stock"] / a["threshold"] if a["threshold"] else 0))
 
 

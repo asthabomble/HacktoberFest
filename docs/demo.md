@@ -118,6 +118,33 @@ Over `http://192.168…` the scan screen shows a placeholder instead, and that's
 
 Both work over plain Wi-Fi. The live preview works on the laptop at `localhost`.
 
+#### Voice on the phone
+
+Voice entry (🎤 on the scan screen, **+ Entry** on a customer) and spoken Pucho questions use the
+browser's speech recognition (Chrome / Android). Like the camera preview, phone browsers usually only
+allow the mic on `https` or `localhost`, so over `http://192.168…` the mic button may say permission was
+denied. **Typing works everywhere**: the voice sheet has a text box ("Ramesh ko 500 udhaar diya") that
+goes through the same Gemma step. On the laptop at `localhost`, the mic works in Chrome.
+
+#### Google sign-in
+
+1. In Google Cloud Console → APIs & Services → Credentials, create an **OAuth client ID** of type
+   *Web application*, and add `http://localhost:5173` under **Authorized JavaScript origins**.
+2. Put the client ID in `backend/.env` as `GOOGLE_OAUTH_CLIENT_ID=…` and restart the backend.
+   The frontend reads it from the backend (`/api/auth/config`), so `frontend/.env` is optional.
+3. Open http://localhost:5173 → **Log in** → **Continue with Google**.
+
+Google only accepts `http://localhost` or **https** addresses, never `http://192.168…`. So on the phone over
+Wi-Fi the Google button won't work (the login page says so and offers **Explore the demo**). To use Google
+sign-in on a phone, serve the app over an https link (for example a tunnel such as `cloudflared tunnel --url
+http://localhost:5173`) and add that https address as another Authorized JavaScript origin.
+
+The email/password form on the login page isn't connected to accounts yet.
+
+#### Language
+
+The language dropdown in the header switches every screen between English, Hindi, Marathi and Hinglish; the choice is remembered.
+
 ---
 
 ## 5. Check that it works
@@ -142,10 +169,12 @@ Typical timings with `gemma-4-26b-a4b-it` + `GOOGLE_THINKING_LEVEL=minimal`:
 
 ## 6. Demo data (optional)
 
-`scripts/seed_demo.py` fills the app with sample customers, entries and products.
+`scripts/seed_demo.py` fills the app with realistic sample data: 10 customers (3 overdue, udhaar today,
+one fully paid), 7 products (4 low on stock) from a supplier bill, and learned shorthand
+("Rmsh" = Ramesh bhau, "ch" = Sugar / Cheeni). Dates are relative to today, so it always looks fresh.
 
-> ⚠️ It **deletes all existing customers, entries and products** first.
-> To keep your real data, point it at a separate demo database:
+> ⚠️ It **replaces all customers, entries, products and shorthand**. It refuses to run on a database
+> that already has customers unless you add `--yes`. To keep your real data, use a separate demo database:
 
 ```bash
 cd backend
@@ -154,6 +183,9 @@ source .venv/bin/activate
 # separate demo database (safe)
 DATABASE_URL=sqlite:///./data/demo.db python -m scripts.seed_demo
 DATABASE_URL=sqlite:///./data/demo.db uvicorn app.main:app --reload --port 8000
+
+# or replace the data in the main database on purpose
+python -m scripts.seed_demo --yes
 ```
 
 Use the same `DATABASE_URL=...` prefix every time you start the backend for the demo.
@@ -189,6 +221,11 @@ python -m scripts.eval_khata samples/        # khata accuracy on your own photos
 | Scans are slow (30 s+) | Set `GOOGLE_THINKING_LEVEL=minimal` in `backend/.env` and restart the backend. |
 | `Address already in use` | Something is still running on the port. Linux/macOS: `fuser -k 8000/tcp` (or `5173/tcp`). |
 | Frontend shows "Server se data nahi mila" | Backend isn't running. Start Terminal 1. |
+| Mic button greyed out | Browser has no speech recognition (e.g. Firefox). Use Chrome, or type in the voice box. |
+| "Mic ki permission nahi mili" on the phone | Phones need `https` for the mic. Type instead, or use the laptop at `localhost`. |
+| Google button does nothing / "origin is not allowed" | You're on a `http://192.168…` address. Use `localhost` on the laptop, or an https link added to the OAuth client's Authorized JavaScript origins. |
+| Login says Google sign-in isn't set up | Add `GOOGLE_OAUTH_CLIENT_ID` to `backend/.env` and restart the backend. |
+| `seed_demo` says the database already has customers | That's the safety check. Use `DATABASE_URL=sqlite:///./data/demo.db …` or add `--yes`. |
 
 ---
 

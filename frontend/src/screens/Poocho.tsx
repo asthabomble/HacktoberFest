@@ -3,16 +3,12 @@ import { ArrowRight, ListFilter, Mic } from "lucide-react";
 import { SubHeader, Tabs } from "../components/ui";
 import { apiGet, apiPost, type ChatResponse, type ChatSample, type StructuredQueryTrace } from "../lib/api";
 import { formatDate, formatRupees } from "../lib/format";
-import { useLanguage, type Language } from "../lib/language";
+import { speechLang, useLang } from "../lib/i18n";
+import { useSpeech } from "../lib/speech";
 
 type Message = { id: number; question: string; response?: ChatResponse; error?: string };
 
-const SAMPLES_BY_LANG: Record<Language, string[]> = {
-  en: ["Who owes > 500?", "Today's total udhaar?", "Which stock is low?", "Top 5 debtors"],
-  hi: ["किसने 500 से ज़्यादा उधार लिया?", "आज का कुल उधार कितना है?", "दुकान में कौन सा सामान कम है?", "रमेश का कितना बाकी है?"],
-  mr: ["कोणाकडे 1000 पेक्षा जास्त उधारी आहे?", "आजची एकूण उधारी किती?", "कोणता माल संपत आला आहे?", "सुरेशचा किती बाकी आहे?"],
-  hinglish: ["Kisne 500 se zyada udhaar liya?", "Aaj ka total udhaar kitna hai?", "Konsa stock low chal raha hai?", "Ramesh ka hisaab batao"],
-};
+const FALLBACK_SAMPLES = ["आज का कुल उधार कितना है?", "किसने 500 से ज़्यादा उधार लिया है?", "दुकान में कौन सा सामान कम है?"];
 
 let nextId = 1;
 
@@ -44,7 +40,7 @@ function Row({ left, right, tone }: { left: string; right: string; tone?: "brand
 }
 
 function AnswerRows({ res }: { res: ChatResponse }) {
-  const { t } = useLanguage();
+  const { t } = useLang();
   const d = res.data;
   switch (res.intent) {
     case "who_owes_more_than":
@@ -66,7 +62,7 @@ function AnswerRows({ res }: { res: ChatResponse }) {
           {(d.recent_entries ?? []).map((e: { date: string; raw_text: string | null; type: string; amount: number }, i: number) => (
             <Row
               key={i}
-              left={`${formatDate(e.date)} · ${e.raw_text || (e.type === "gave" ? "Udhaar" : "Jama")}`}
+              left={`${formatDate(e.date)} · ${e.raw_text || t(e.type === "gave" ? "Udhaar" : "Jama")}`}
               right={`${e.type === "gave" ? "+" : "−"}${formatRupees(e.amount)}`}
               tone={e.type === "got" ? "brand" : undefined}
             />
@@ -76,8 +72,8 @@ function AnswerRows({ res }: { res: ChatResponse }) {
     case "total_udhaar":
       return (
         <>
-          <Row left={t("diya_udhaar")} right={formatRupees(d.total_gave ?? 0)} />
-          <Row left={t("jama_mila")} right={formatRupees(d.total_got ?? 0)} tone="brand" />
+          <Row left={t("Diya (udhaar)")} right={formatRupees(d.total_gave ?? 0)} />
+          <Row left={t("Jama (mila)")} right={formatRupees(d.total_got ?? 0)} tone="brand" />
         </>
       );
     case "items_running_low":
@@ -93,21 +89,20 @@ function AnswerRows({ res }: { res: ChatResponse }) {
   }
 }
 
-// Browser speech recognition (Chrome/Android expose it as webkitSpeechRecognition)
-type Recognition = { lang: string; onresult: (e: any) => void; onend: () => void; start: () => void };
-const SpeechRecognitionCtor: (new () => Recognition) | undefined =
-  (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-
 export default function Poocho({ onBack }: { onBack: () => void }) {
-  const { lang, t } = useLanguage();
+  const { t, lang } = useLang();
   const [tab, setTab] = useState<"chat" | "history">("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [samples, setSamples] = useState<string[]>(FALLBACK_SAMPLES);
   const endRef = useRef<HTMLDivElement>(null);
 
-  const activeSamples = SAMPLES_BY_LANG[lang] || SAMPLES_BY_LANG.en;
+  useEffect(() => {
+    apiGet<{ samples: ChatSample[] }>("/api/chat/samples")
+      .then((r) => r.samples?.length && setSamples(r.samples.map((s) => s.query)))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,7 +117,7 @@ export default function Poocho({ onBack }: { onBack: () => void }) {
     setTab("chat");
     setLoading(true);
     try {
-      const response = await apiPost<ChatResponse>("/api/chat", { query: question, language: lang });
+      const response = await apiPost<ChatResponse>("/api/chat", { query: question });
       setMessages((m) => m.map((x) => (x.id === id ? { ...x, response } : x)));
     } catch (e) {
       setMessages((m) => m.map((x) => (x.id === id ? { ...x, error: (e as Error).message } : x)));
@@ -131,25 +126,18 @@ export default function Poocho({ onBack }: { onBack: () => void }) {
     }
   }
 
-  function listen() {
-    if (!SpeechRecognitionCtor) return;
-    const rec = new SpeechRecognitionCtor();
-    rec.lang = lang === "mr" ? "mr-IN" : lang === "hi" || lang === "hinglish" ? "hi-IN" : "en-IN";
-    rec.onresult = (e) => setInput(e.results[0][0].transcript);
-    rec.onend = () => setListening(false);
-    setListening(true);
-    rec.start();
-  }
+  // Speak a question; it's sent as soon as you finish speaking
+  const speech = useSpeech(speechLang(lang), (heard) => ask(heard));
 
   return (
     <>
-      <SubHeader title={t("pucho_title")} onBack={onBack} />
+      <SubHeader title={t("Pucho")} onBack={onBack} />
       <Tabs
         active={tab}
         onChange={setTab}
         tabs={[
-          { id: "chat", label: t("pucho_tab_chat") },
-          { id: "history", label: t("pucho_tab_history") },
+          { id: "chat", label: t("Chat") },
+          { id: "history", label: t("History") },
         ]}
       />
 
@@ -157,7 +145,7 @@ export default function Poocho({ onBack }: { onBack: () => void }) {
         {tab === "chat" && (
           <>
             {messages.length === 0 && (
-              <p className="py-6 text-center text-muted">{t("pucho_hint")}</p>
+              <p className="py-6 text-center text-muted">{t("Udhaar ya stock ke baare mein Hindi, Marathi ya English mein puchiye.")}</p>
             )}
             {messages.map((m) => (
               <div key={m.id} className="space-y-4">
@@ -173,17 +161,17 @@ export default function Poocho({ onBack }: { onBack: () => void }) {
                     </p>
                   </div>
                 )}
-                {m.error && <p className="max-w-[92%] border border-danger/40 bg-danger-soft px-4 py-3 text-danger">{m.error}</p>}
+                {m.error && <p className="max-w-[92%] border border-danger/40 bg-danger-soft px-4 py-3 text-danger">{t("Jawab nahi mila: {error}", { error: m.error })}</p>}
               </div>
             ))}
-            {loading && <p className="text-muted">{t("gemma_thinking")}</p>}
+            {loading && <p className="animate-pulse text-muted">{t("Gemma hisaab jod raha hai…")}</p>}
             <div ref={endRef} />
           </>
         )}
 
         {tab === "history" &&
           (messages.length === 0 ? (
-            <p className="py-6 text-center text-muted">{t("no_questions_yet")}</p>
+            <p className="py-6 text-center text-muted">{t("Abhi koi sawaal nahi pucha.")}</p>
           ) : (
             <ul className="border border-line bg-white">
               {[...messages].reverse().map((m) => (
@@ -200,9 +188,15 @@ export default function Poocho({ onBack }: { onBack: () => void }) {
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-page pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto max-w-md px-4 pt-3">
-          <p className="mb-2 text-sm text-muted">{t("try_asking")}</p>
+          <p className="mb-2 text-sm text-muted">
+            {speech.listening
+              ? t("Sun rahe hain…")
+              : speech.error === "denied"
+                ? t("Mic ki permission nahi mili (phone par https chahiye). Neeche likh dijiye.")
+                : t("Try asking")}
+          </p>
           <div className="flex flex-wrap gap-2">
-            {activeSamples.slice(0, 4).map((s) => (
+            {samples.slice(0, 3).map((s) => (
               <button
                 key={s}
                 onClick={() => ask(s)}
@@ -224,19 +218,19 @@ export default function Poocho({ onBack }: { onBack: () => void }) {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={t("pucho_placeholder")}
+            placeholder={t("Hindi, Marathi ya English mein puchiye")}
             className="min-w-0 flex-1 border-b-2 border-line bg-soft px-3 py-3 text-[15px] outline-none placeholder:text-muted focus:border-brand"
           />
           <button
             type="button"
-            onClick={listen}
-            disabled={!SpeechRecognitionCtor || listening}
-            aria-label="Speak your question"
-            className={`grid w-12 place-items-center border-2 border-brand ${listening ? "bg-chip" : "bg-white"} text-brand disabled:opacity-40`}
+            onClick={speech.listening ? speech.stop : speech.start}
+            disabled={!speech.supported || loading}
+            aria-label={t("Speak your question")}
+            className={`grid w-12 place-items-center border-2 border-brand ${speech.listening ? "animate-pulse bg-chip" : "bg-white"} text-brand disabled:opacity-40`}
           >
             <Mic size={22} />
           </button>
-          <button type="submit" disabled={!input.trim() || loading} aria-label="Ask" className="grid w-14 place-items-center bg-bar text-logo disabled:opacity-50">
+          <button type="submit" disabled={!input.trim() || loading} aria-label={t("Ask")} className="grid w-14 place-items-center bg-bar text-logo disabled:opacity-50">
             <ArrowRight size={22} />
           </button>
         </form>
