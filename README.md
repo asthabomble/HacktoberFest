@@ -59,18 +59,28 @@ The home screen shows all three.
 
 ### Snap khata → udhaar entries (Phase 1)
 
-1. **Scan** tab → take a photo of a khata page (or pick from gallery).
+1. **Scan** (bottom nav or "Scan khata page") → live camera preview where the browser
+   allows it (localhost / https), otherwise the phone's camera app; or pick from Gallery.
    The photo is shrunk to 1600px on the phone before upload.
 2. Gemma reads each line: customer name, amount, gave/got, date, raw text, confidence.
    Devanagari digits and "₹1,200/-" style amounts are cleaned up in code, and rows
    with a missing name, zero/huge amount or paise are forced to low confidence.
-3. **Confirm screen**: every row is editable; low-confidence rows are yellow.
-   Untick rows you don't want. Only rows you confirm are saved.
-4. **Khata** tab: customers with balance (gave − got), tap one for the ledger with
-   running balance and a link to the source photo.
+3. **Review entries**: every row shows what was read ("Read as: …") and is editable;
+   low-confidence rows are orange, with a "Needs review" filter. Only rows you
+   confirm are saved.
+4. **Home**: total outstanding, udhaar today, overdue (30+ days without a payment),
+   top debtors. **Customers**: searchable list. **Customer**: balance, last payment,
+   ledger with running balance, source photos, "+ Entry" for manual entries and a
+   prefilled WhatsApp reminder.
 
 API: `POST /api/khata/extract` (photo → rows, nothing saved), `POST /api/khata/confirm`,
-`GET /api/customers`, `GET /api/customers/{id}/ledger`.
+`GET /api/overview`, `GET /api/customers`, `GET /api/customers/{id}/ledger`.
+
+### Ask in Hindi/Marathi/Hinglish (Phase 3 – Poocho)
+
+Use the Poocho tab to ask natural language questions about customer balances, totals, and low stock. The backend validates a structured intent and runs only whitelisted Python queries against the database; model output is never executed as SQL.
+
+Run the sample suite with `cd backend` then `python -m scripts.test_poocho`.
 
 ### Supplier Bill + Shelf → Stock (Phase 2)
 

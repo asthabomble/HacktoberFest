@@ -1,168 +1,148 @@
 import { useEffect, useState } from "react";
-import { apiGet, type AiHealth, type AppHealth } from "../lib/api";
-import type { Tab } from "../components/Nav";
+import { Camera } from "lucide-react";
+import CustomerTable from "../components/CustomerTable";
 import type { ScanMode } from "./Scan";
+import { StockList } from "./Stock";
+import { Card, Chip, PrimaryButton, Tabs } from "../components/ui";
+import { apiGet, type CustomerList, type Overview } from "../lib/api";
+import { formatRupees, formatToday } from "../lib/format";
 
-type Check = { label: string; ok: boolean | null; detail: string };
+export type HomeTab = "overview" | "udhaar" | "stock" | "alerts";
 
-function StatusRow({ label, ok, detail }: Check) {
-  const color = ok === null ? "bg-muted" : ok ? "bg-mint" : "bg-rose";
-  const word = ok === null ? "WAIT" : ok ? "OK" : "FAIL";
+function Stat({ label, value, tone, className = "" }: { label: string; value: string; tone?: "red" | "brown"; className?: string }) {
+  const color = tone === "red" ? "text-danger" : tone === "brown" ? "text-brand" : "text-ink";
   return (
-    <li className="flex items-start gap-3 border-t-2 border-line py-3 first:border-t-0">
-      <span className={`mt-1.5 size-3 shrink-0 ${color}`} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-semibold">{label}</span>
-          <span className={`font-pixel text-xs ${ok ? "text-mint" : ok === false ? "text-rose" : "text-muted"}`}>
-            {word}
-          </span>
-        </div>
-        <p className="break-words font-mono text-xs text-muted">{detail}</p>
-      </div>
-    </li>
+    <div className={`border-line p-4 ${className}`}>
+      <p className="text-sm text-muted">{label}</p>
+      <p className={`mt-1 font-mono text-2xl font-semibold leading-tight ${color}`}>{value}</p>
+    </div>
   );
 }
 
-const COMING = [
-  { title: "Poocho", hint: "हिंदी / मराठी में सवाल", phase: 3, accent: "border-sky" },
-  { title: "Alerts", hint: "WhatsApp याद दिलाओ", phase: 4, accent: "border-rose" },
-  { title: "Seekhta hai", hint: "आपकी लिखावट समझे", phase: 5, accent: "border-marigold" },
-];
+function Empty({ children }: { children: string }) {
+  return <p className="px-4 py-8 text-center text-muted">{children}</p>;
+}
 
 export default function Home({
-  onNavigate,
+  initialTab = "overview",
+  onOpenCustomer,
+  onOpenProduct,
+  onScan,
+  onViewAll,
 }: {
-  onNavigate: (tab: Tab, mode?: ScanMode) => void;
+  initialTab?: HomeTab;
+  onOpenCustomer: (id: number) => void;
+  onOpenProduct: (id: number) => void;
+  onScan: (mode: ScanMode) => void;
+  onViewAll: () => void;
 }) {
-  const [api, setApi] = useState<Check>({ label: "API", ok: null, detail: "checking…" });
-  const [db, setDb] = useState<Check>({ label: "Database", ok: null, detail: "checking…" });
-  const [ai, setAi] = useState<Check>({ label: "Gemma", ok: null, detail: "checking…" });
-  const [deepRunning, setDeepRunning] = useState(false);
-
-  async function checkApp() {
-    try {
-      const h = await apiGet<AppHealth>("/api/health");
-      setApi({ label: "API", ok: true, detail: "FastAPI reachable" });
-      setDb({ label: "Database", ok: h.database, detail: h.database ? "SQLite connected" : "query failed" });
-    } catch (e) {
-      const msg = `backend not reachable (${(e as Error).message})`;
-      setApi({ label: "API", ok: false, detail: msg });
-      setDb({ label: "Database", ok: false, detail: "unknown" });
-    }
-  }
-
-  async function checkAi(deep = false) {
-    setAi((a) => ({ ...a, ok: null, detail: deep ? "asking Gemma to reply…" : "checking…" }));
-    try {
-      const h = await apiGet<AiHealth>(`/api/health/ai${deep ? "?deep=true" : ""}`);
-      const extra = h.generation ? ` · replied "${h.generation}"` : "";
-      setAi({ label: `Gemma (${h.provider})`, ok: h.ok, detail: `${h.model} · ${h.detail}${extra}` });
-    } catch (e) {
-      setAi({ label: "Gemma", ok: false, detail: (e as Error).message });
-    }
-  }
+  const [tab, setTab] = useState<HomeTab>(initialTab);
+  const [data, setData] = useState<Overview | null>(null);
+  const [all, setAll] = useState<CustomerList | null>(null);
+  const [error, setError] = useState("");
+  const [loadedAt, setLoadedAt] = useState("");
 
   useEffect(() => {
-    checkApp();
-    checkAi();
+    Promise.all([apiGet<Overview>("/api/overview"), apiGet<CustomerList>("/api/customers")])
+      .then(([o, c]) => {
+        setData(o);
+        setAll(c);
+        setLoadedAt(new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }));
+      })
+      .catch((e) => setError(e.message));
   }, []);
 
-  async function runDeep() {
-    setDeepRunning(true);
-    await checkAi(true);
-    setDeepRunning(false);
-  }
+  const owing = (all?.customers ?? []).filter((c) => c.balance > 0);
+  const overdue = owing.filter((c) => c.days_due >= (data?.overdue_days ?? 30));
 
   return (
     <>
-      <header className="mb-6">
-        <p className="font-pixel text-xs tracking-widest text-mint">&gt; kirana_os v0.2</p>
-        <h1 className="font-pixel text-3xl leading-tight text-marigold">
-          Hisaab<span className="text-paper">Kitaab</span>
-        </h1>
-        <p className="mt-1 text-muted">Photo se khata, supplier bill se stock.</p>
-      </header>
-
-      {/* Action Cards */}
-      <div className="mb-8 space-y-3">
-        <button
-          onClick={() => onNavigate("scan", "khata")}
-          className="block-shadow-marigold press flex w-full items-center justify-between border-2 border-marigold bg-marigold px-4 py-3.5 text-left text-ink"
-        >
-          <span>
-            <span className="block font-pixel text-base">Scan khata</span>
-            <span className="block text-xs font-medium">खाते के पन्ने की फोटो लो (Udhaar)</span>
-          </span>
-          <span className="font-pixel text-2xl">&gt;</span>
-        </button>
-
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => onNavigate("scan", "bill")}
-            className="press flex flex-col justify-between border-2 border-mint bg-panel p-3 text-left hover:border-mint"
-          >
-            <div>
-              <span className="font-pixel text-[10px] text-mint">PHASE 2</span>
-              <span className="block font-pixel text-sm text-paper mt-0.5">Supplier Bill</span>
-              <span className="block text-xs text-muted mt-1">बिल से स्टॉक अपडेट</span>
-            </div>
-            <span className="font-pixel text-mint text-sm mt-3">&gt; Scan bill</span>
-          </button>
-
-          <button
-            onClick={() => onNavigate("scan", "shelf")}
-            className="press flex flex-col justify-between border-2 border-sky bg-panel p-3 text-left hover:border-sky"
-          >
-            <div>
-              <span className="font-pixel text-[10px] text-sky">PHASE 2</span>
-              <span className="block font-pixel text-sm text-paper mt-0.5">Shelf Check</span>
-              <span className="block text-xs text-muted mt-1">शेल्फ की फोटो लो</span>
-            </div>
-            <span className="font-pixel text-sky text-sm mt-3">&gt; Check status</span>
-          </button>
+      <div className="border-b border-line bg-white">
+        <div className="mx-auto max-w-md px-4 py-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="truncate text-xl font-semibold">{data?.shop.name ?? "…"}</h2>
+            <span className="shrink-0 text-sm text-muted">{formatToday()}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Chip>{data?.customer_count ?? 0} customers</Chip>
+            {loadedAt && <Chip tone="gray">Updated {loadedAt}</Chip>}
+          </div>
         </div>
       </div>
 
-      <section className="block-shadow border-2 border-line bg-panel p-4">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-pixel text-sm text-paper">System check</h2>
-          <button
-            onClick={() => {
-              checkApp();
-              checkAi();
-            }}
-            className="font-mono text-xs text-muted underline-offset-4 hover:text-paper hover:underline"
-          >
-            refresh
-          </button>
-        </div>
-        <ul>
-          <StatusRow {...api} />
-          <StatusRow {...db} />
-          <StatusRow {...ai} />
-        </ul>
-        <button
-          onClick={runDeep}
-          disabled={deepRunning}
-          className="block-shadow-marigold press mt-3 w-full border-2 border-marigold bg-ink py-3 font-pixel text-sm text-marigold disabled:opacity-50"
-        >
-          {deepRunning ? "Gemma soch raha hai…" : "Test Gemma reply"}
-        </button>
-      </section>
+      <Tabs<HomeTab>
+        active={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "overview", label: "Overview" },
+          { id: "udhaar", label: "Udhaar" },
+          { id: "stock", label: "Stock" },
+          { id: "alerts", label: "Alerts", badge: overdue.length },
+        ]}
+      />
 
-      <section className="mt-8">
-        <h2 className="mb-3 font-pixel text-sm text-muted">Coming up</h2>
-        <div className="grid grid-cols-3 gap-2">
-          {COMING.map((c) => (
-            <div key={c.title} className={`border-2 border-t-4 ${c.accent} bg-panel p-2.5`}>
-              <p className="font-mono text-[9px] text-muted">PHASE {c.phase}</p>
-              <p className="font-semibold text-xs leading-tight text-paper">{c.title}</p>
-              <p className="text-[11px] text-muted mt-0.5">{c.hint}</p>
+      <div className="mx-auto max-w-md space-y-5 px-4 py-4">
+        {error && <p className="text-sm text-danger">Server se data nahi mila: {error}</p>}
+
+        {tab === "overview" && (
+          <>
+            <Card className="grid grid-cols-2">
+              <Stat label="Total outstanding" value={formatRupees(data?.total_outstanding ?? 0)} className="border-b border-r" />
+              <Stat label="Udhaar today" value={formatRupees(data?.udhaar_today ?? 0)} className="border-b" />
+              <Stat label={`Overdue ${data?.overdue_days ?? 30}+ days`} value={String(data?.overdue_count ?? 0)} tone="red" className="border-r" />
+              <Stat label="Low stock items" value={data?.low_stock_count == null ? "—" : String(data.low_stock_count)} tone="brown" />
+            </Card>
+
+            <Card>
+              <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                <h3 className="text-lg font-semibold">Top debtors</h3>
+                <button onClick={onViewAll} className="font-medium text-brand">
+                  View all
+                </button>
+              </div>
+              {data && data.top_debtors.length > 0 ? (
+                <CustomerTable customers={data.top_debtors} overdueDays={data.overdue_days} onOpen={onOpenCustomer} />
+              ) : (
+                <Empty>Abhi koi udhaar nahi. Pehla khata page scan karein.</Empty>
+              )}
+            </Card>
+
+            <PrimaryButton icon={Camera} onClick={() => onScan("khata")} className="w-full">
+              Scan khata page
+            </PrimaryButton>
+          </>
+        )}
+
+        {tab === "udhaar" && (
+          <Card>
+            {owing.length > 0 ? (
+              <CustomerTable customers={owing} overdueDays={all!.overdue_days} onOpen={onOpenCustomer} action="chevron" />
+            ) : (
+              <Empty>Kisi ka udhaar baaki nahi.</Empty>
+            )}
+          </Card>
+        )}
+
+        {tab === "stock" && (
+          <StockList onOpen={onOpenProduct} onScanBill={() => onScan("bill")} onScanShelf={() => onScan("shelf")} />
+        )}
+
+        {tab === "alerts" && (
+          <Card>
+            <div className="border-b border-line px-4 py-3">
+              <h3 className="text-lg font-semibold">Overdue udhaar</h3>
+              <p className="text-sm text-muted">
+                {data?.overdue_days ?? 30}+ din se koi payment nahi aaya
+              </p>
             </div>
-          ))}
-        </div>
-      </section>
+            {overdue.length > 0 ? (
+              <CustomerTable customers={overdue} overdueDays={all!.overdue_days} onOpen={onOpenCustomer} />
+            ) : (
+              <Empty>Koi overdue nahi. Sab theek hai.</Empty>
+            )}
+          </Card>
+        )}
+      </div>
     </>
   );
 }

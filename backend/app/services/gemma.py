@@ -8,6 +8,7 @@ The rest of the app only uses:
 Switch providers with AI_PROVIDER=google|ollama in .env.
 """
 
+import asyncio
 import base64
 import json
 import re
@@ -67,13 +68,35 @@ class GoogleAIStudio:
         # Gemma on AI Studio doesn't support JSON mode, so json_mode is handled by the prompt.
         body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": {"temperature": 0.1}}
         url = f"{self.base_url}/models/{self.model}:generateContent"
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                res = await client.post(url, json=body, headers=self._headers())
-        except httpx.HTTPError as e:
-            raise GemmaError(f"Could not reach Google AI Studio: {e}") from e
-        if res.status_code != 200:
-            raise GemmaError(f"Google AI Studio error {res.status_code}: {res.text[:300]}")
+
+        max_attempts = 3
+        backoff = 2.0
+        res = None
+        for attempt in range(max_attempts):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    res = await client.post(url, json=body, headers=self._headers())
+            except httpx.HTTPError as e:
+                if attempt == max_attempts - 1:
+                    raise GemmaError(f"Could not reach Google AI Studio: {e}") from e
+                await asyncio.sleep(backoff)
+                backoff *= 1.5
+                continue
+
+            if res.status_code == 429:
+                if attempt == max_attempts - 1:
+                    raise GemmaError(f"Google AI Studio quota / rate limit (429): {res.text[:300]}")
+                await asyncio.sleep(backoff)
+                backoff *= 2.0
+                continue
+
+            if res.status_code != 200:
+                raise GemmaError(f"Google AI Studio error {res.status_code}: {res.text[:300]}")
+            break
+
+        if not res or res.status_code != 200:
+            raise GemmaError("Failed to get response from Google AI Studio")
+
         try:
             parts_out = res.json()["candidates"][0]["content"]["parts"]
             return "".join(p.get("text", "") for p in parts_out)

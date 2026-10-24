@@ -119,8 +119,17 @@ def list_shop_products(session: Session, shop_id: int) -> list[dict[str, Any]]:
                 "last_source": last_source,
             }
         )
+        result[-1]["is_low"] = is_low_stock(result[-1])
 
     return result
+
+
+def is_low_stock(product: dict[str, Any]) -> bool:
+    """Low if the latest shelf check said low, or counted stock is at/below the product's threshold."""
+    if product["shelf_status"] == ShelfStatus.low:
+        return True
+    threshold = product["low_stock_threshold"]
+    return threshold > 0 and product["current_stock"] <= threshold
 
 
 def get_product_stock_history(session: Session, product_id: int) -> list[dict[str, Any]]:

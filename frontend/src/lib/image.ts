@@ -14,3 +14,15 @@ export async function shrinkImage(file: File): Promise<Blob> {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not process photo"))), "image/jpeg", 0.85),
   );
 }
+
+/** Grab the current frame of a live camera <video> as a JPEG, same size limit as above. */
+export function captureFrame(video: HTMLVideoElement): Promise<Blob> {
+  const scale = Math.min(1, MAX_SIDE / Math.max(video.videoWidth, video.videoHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(video.videoWidth * scale);
+  canvas.height = Math.round(video.videoHeight * scale);
+  canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not capture photo"))), "image/jpeg", 0.85),
+  );
+}

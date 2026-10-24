@@ -1,58 +1,46 @@
 @import "tailwindcss";
 
 /*
-  Theme: retro ledger. Dark ink background, hard 2px borders,
-  offset block shadows, pixel font for labels, mono font for money.
-  Hind covers Devanagari (Hindi/Marathi) and Latin.
+  Design: "HisaabKitaab UI" mockups.
+  Mustard header bar and primary buttons, warm cream page, square white
+  cards with thin slate borders, brown accent for tabs/links/outline buttons,
+  monospace amounts. IBM Plex Sans + Plex Sans Devanagari for Hindi/Marathi.
 */
 @theme {
-  --color-ink: #14111f;
-  --color-panel: #1e1a2e;
-  --color-panel-2: #2a2440;
-  --color-line: #3d3560;
-  --color-paper: #f3ead8;
-  --color-muted: #a49cbf;
+  --color-page: #fffcf3;
+  --color-bar: #e3c565; /* header + primary buttons */
+  --color-bar-strong: #d8b64c;
+  --color-brand: #8a5a00; /* active tab, links, outline buttons */
+  --color-logo: #3a2a06;
+  --color-ink: #1f2933; /* main text */
+  --color-muted: #5f6b76;
+  --color-line: #d5dce3;
+  --color-soft: #f1f5f9; /* table headers, input fills */
 
-  --color-marigold: #ffb547; /* primary */
-  --color-mint: #7cf2c0; /* ok / money in */
-  --color-rose: #ff6fa8; /* alert / money out */
-  --color-sky: #8ab4ff;
-  --color-warn: #ffe066; /* low-confidence rows */
+  --color-danger: #b42318;
+  --color-danger-soft: #fde4e2;
+  --color-warn: #f4a259; /* low-confidence badge */
+  --color-warn-soft: #fde8d7;
+  --color-warn-line: #e8994a;
+  --color-info-soft: #fef3c7;
+  --color-info-line: #f2dc8b;
+  --color-info-text: #7a5300;
+  --color-chip: #fdf1c4;
+  --color-camera: #28313b;
 
-  --font-sans: "Hind", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --font-pixel: "Silkscreen", "JetBrains Mono", monospace;
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Devanagari", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "IBM Plex Sans Devanagari", ui-monospace, monospace;
 }
 
 @layer base {
   html,
   body {
-    background-color: var(--color-ink);
-    color: var(--color-paper);
+    background-color: var(--color-page);
+    color: var(--color-ink);
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     min-height: 100dvh;
-    /* faint ledger grid, like a khata page */
-    background-image:
-      linear-gradient(var(--color-panel) 1px, transparent 1px),
-      linear-gradient(90deg, var(--color-panel) 1px, transparent 1px);
-    background-size: 24px 24px;
-  }
-}
-
-@utility block-shadow {
-  box-shadow: 4px 4px 0 0 var(--color-line);
-}
-
-@utility block-shadow-marigold {
-  box-shadow: 4px 4px 0 0 var(--color-marigold);
-}
-
-@utility press {
-  transition: transform 80ms, box-shadow 80ms;
-  &:active {
-    transform: translate(3px, 3px);
-    box-shadow: 1px 1px 0 0 var(--color-line);
   }
 }
 
@@ -61,6 +49,6 @@
     top: 0;
   }
   to {
-    top: calc(100% - 4px);
+    top: calc(100% - 3px);
   }
 }

@@ -56,15 +56,31 @@ export type KhataRow = {
 
 export type ExtractResponse = { source_image: string; rows: KhataRow[] };
 
-export type CustomerBalance = {
+export type CustomerSummary = {
   id: number;
   name: string;
   phone: string | null;
   balance: number;
+  days_due: number;
   last_entry: string | null;
+  last_payment: { amount: number; date: string } | null;
 };
 
-export type CustomerList = { total_outstanding: number; customers: CustomerBalance[] };
+export type CustomerList = { total_outstanding: number; overdue_days: number; customers: CustomerSummary[] };
+
+export type Shop = { id: number; name: string; owner_name: string | null; language: string };
+
+export type Overview = {
+  shop: Shop;
+  customer_count: number;
+  total_outstanding: number;
+  udhaar_today: number;
+  overdue_count: number;
+  overdue_days: number;
+  low_stock_count: number | null;
+  shorthand_count: number;
+  top_debtors: CustomerSummary[];
+};
 
 export type LedgerEntry = {
   id: number;
@@ -78,8 +94,9 @@ export type LedgerEntry = {
 };
 
 export type Ledger = {
-  customer: { id: number; name: string; phone: string | null };
-  balance: number;
+  customer: CustomerSummary;
+  aliases: string[];
+  overdue_days: number;
   entries: LedgerEntry[];
 };
 
@@ -175,6 +192,7 @@ export type ProductStockItem = {
   last_purchase_date: string | null;
   last_updated_at: string;
   last_source: "bill" | "shelf_assessment" | "manual";
+  is_low: boolean;
 };
 
 export type ProductStockHistoryEntry = {
@@ -196,4 +214,30 @@ export type ProductStockHistory = {
     low_stock_threshold: number;
   };
   history: ProductStockHistoryEntry[];
+};
+
+export type ChatSample = {
+  category: string;
+  lang: string;
+  label: string;
+  query: string;
+  intent: string;
+};
+
+export type StructuredQueryTrace = {
+  intent: string;
+  threshold?: number | null;
+  time_period?: string | null;
+  customer_name?: string | null;
+  limit?: number | null;
+  language: string;
+  confidence: "high" | "low";
+};
+
+export type ChatResponse = {
+  query: string;
+  intent: string;
+  structured_query: StructuredQueryTrace;
+  data: Record<string, any>;
+  answer: string;
 };
